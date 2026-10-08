@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BRAND, DEFAULT_PRIZES, NAME_COLOR_PRESETS } from './config';
+import { BRAND, DEFAULT_LIVE_SERVER, DEFAULT_PRIZES, NAME_COLOR_PRESETS } from './config';
 
 /* ------------------------------------------------------------------ types */
 
@@ -105,7 +105,7 @@ export const defaultState = (): RaffleState => ({
     companyName: BRAND.company,
     companyDisplay: 'name',
     nameColors: NAME_COLOR_PRESETS[0].colors,
-    live: { server: process.env.NEXT_PUBLIC_LIVE_SERVER_URL || '', showQr: false },
+    live: { server: DEFAULT_LIVE_SERVER, showQr: false },
   },
   updatedAt: Date.now(),
 });
@@ -122,7 +122,11 @@ export function loadState(): RaffleState {
     return {
       participants: Array.isArray(parsed.participants) ? parsed.participants : [],
       winners: Array.isArray(parsed.winners) ? parsed.winners : [],
-      settings: { ...d.settings, ...(parsed.settings ?? {}), live: { ...d.settings.live, ...(parsed.settings?.live ?? {}) } },
+      settings: {
+        ...d.settings,
+        ...(parsed.settings ?? {}),
+        live: { ...d.settings.live, ...(parsed.settings?.live ?? {}), server: parsed.settings?.live?.server || d.settings.live.server },
+      },
       updatedAt: parsed.updatedAt ?? Date.now(),
     };
   } catch {

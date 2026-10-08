@@ -173,6 +173,8 @@ Let the audience follow the draw live on their own phones — at the venue or an
 
 ### Option A — Cloudflare (recommended)
 
+**Already set up:** the live server runs at **https://raffle-live.inbox-ashen.workers.dev** and is the built-in default (`DEFAULT_LIVE_SERVER` in `lib/config.ts`). In the admin just press **Go live** — no address to enter. The steps below are only needed to deploy it again to another Cloudflare account.
+
 One-time setup, about 5 minutes:
 
 1. **Create an API token:** Cloudflare dashboard → *My Profile → API Tokens → Create Token* → template **Edit Cloudflare Workers** → *Continue → Create Token*. Copy it.
@@ -182,9 +184,9 @@ One-time setup, about 5 minutes:
    - `CLOUDFLARE_ACCOUNT_ID` = the account ID
    - optional `LIVE_CREATE_TOKEN` = a password needed to start a live view (recommended)
 4. **Deploy:** *Actions → Deploy live server to Cloudflare → Run workflow*. When it finishes, the run summary shows the address, e.g. `https://raffle-live.<your-subdomain>.workers.dev`. (It also redeploys by itself whenever `cloudflare/` changes on `main`.)
-5. *(Optional)* Add that address as the repository **variable** `LIVE_SERVER_URL` and re-run *Deploy to GitHub Pages*, so the admin is pre-filled.
+5. *(Optional, only for a different address)* Add it as the repository **variable** `LIVE_SERVER_URL` and re-run *Deploy to GitHub Pages* to make it the default, or change `DEFAULT_LIVE_SERVER` in `lib/config.ts`.
 
-On the event day: Admin → **Online live view** → enter the address (if not pre-filled) → **Test connection** → **Go live**, then continue with step 4 below.
+On the event day: Admin → **Online live view** → **Go live** (the default address is already filled in; **Test connection** checks it), then continue with step 4 below.
 
 Free plan limits are far above what a raffle needs (100,000 requests a day). Rooms untouched for 7 days are deleted automatically. To try it locally: `cd cloudflare && npm install && npm run dev` (serves on `http://localhost:8787`).
 
@@ -214,7 +216,7 @@ On Cloudflare the same options are `ALLOWED_ORIGINS` in `cloudflare/wrangler.tom
 
 | Setting | What it does |
 |---|---|
-| `NEXT_PUBLIC_LIVE_SERVER_URL` | Default server address pre-filled in the admin. For GitHub Pages set the repository **variable** `LIVE_SERVER_URL` instead. |
+| `NEXT_PUBLIC_LIVE_SERVER_URL` | Default server address pre-filled in the admin (built-in default: `https://raffle-live.inbox-ashen.workers.dev`). For GitHub Pages set the repository **variable** `LIVE_SERVER_URL` instead. |
 | `PORT` | Live server port (default `8787`). |
 | `LIVE_DATA_FILE` | JSON file for live rooms (default `data/live.json`, ignored by git). |
 | `LIVE_CREATE_TOKEN` | Password needed to start a live view (enter it in the admin). Recommended when the server is on the internet. |

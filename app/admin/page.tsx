@@ -17,7 +17,7 @@ import {
   IconUpload,
   IconWarn,
 } from '@/components/Icons';
-import { BRAND, NAME_COLOR_PRESETS, asset } from '@/lib/config';
+import { BRAND, DEFAULT_LIVE_SERVER, NAME_COLOR_PRESETS, asset } from '@/lib/config';
 import { downloadWinners } from '@/lib/excel';
 import QrCode from '@/components/QrCode';
 import { buildSnapshot, liveClose, liveCreateRoom, liveGet, liveHealth, livePublish, normalizeServer, viewerUrl } from '@/lib/live';
@@ -330,13 +330,18 @@ function LiveCard({ state, update, online }: CardProps & { online: boolean }) {
       {!room ? (
         <>
           <p className="help">
-            Let people watch the draw live on their own phones. Start the live server (<code>npm run live</code>, see the README), enter its address and press <b>Go live</b>.
+            Let people watch the draw live on their own phones. The live server is ready to use — just press <b>Go live</b>. (To use another server, e.g. <code>npm run live</code>, change the address; see the README.)
           </p>
           <div className="col" style={{ gap: 10 }}>
             <label className="field">
               Live server address
-              <input className="input" value={live.server} placeholder="e.g. https://raffle-live.trycloudflare.com" onChange={(e) => setLive({ server: e.target.value })} />
+              <input className="input" value={live.server} placeholder={DEFAULT_LIVE_SERVER} onChange={(e) => setLive({ server: e.target.value })} />
             </label>
+            {server !== normalizeServer(DEFAULT_LIVE_SERVER) && (
+              <button className="btn sm" style={{ alignSelf: 'flex-start' }} onClick={() => setLive({ server: DEFAULT_LIVE_SERVER })}>
+                Use default server
+              </button>
+            )}
             <label className="field">
               Server password <span className="note" style={{ margin: 0 }}>(only if the server has one)</span>
               <input className="input" type="password" value={live.password ?? ''} onChange={(e) => setLive({ password: e.target.value || undefined })} />
