@@ -7,7 +7,8 @@ export type ImportRow = Omit<Participant, 'id'>;
 
 type Cell = string | number | boolean | Date | null | undefined;
 
-const NAME_RE = /^(full\s*)?name|participant|customer|attendee|^name$/i;
+const NAME_RE = /^(full\s*|participant\s*|customer\s*|attendee\s*)?name$/i; // best: "Name", "Full name"…
+const NAME_LOOSE_RE = /name|participant|customer|attendee/i; // fallback, ignoring ID-like columns
 const TICKET_RE = /ticket|id|no\.?$|number|code|reg/i;
 const GROUP_RE = /branch|dept|department|group|team|company|region|city|outlet|organi[sz]ation/i;
 
@@ -29,7 +30,8 @@ export function rowsToParticipants(rows: Cell[][]): ImportRow[] {
   let start = 0;
 
   const header = clean[0];
-  const hNameIdx = header.findIndex((h) => NAME_RE.test(h));
+  let hNameIdx = header.findIndex((h) => NAME_RE.test(h));
+  if (hNameIdx === -1) hNameIdx = header.findIndex((h) => NAME_LOOSE_RE.test(h) && !/\b(id|no|number|code)\b/i.test(h));
   if (hNameIdx !== -1) {
     start = 1;
     nameIdx = hNameIdx;
