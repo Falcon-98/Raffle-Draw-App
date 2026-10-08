@@ -1,11 +1,13 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { BRAND, asset } from '@/lib/config';
+import ServiceWorker from '@/components/ServiceWorker';
 
 export const metadata: Metadata = {
   title: `${BRAND.event} · Lucky Draw | ${BRAND.company}`,
   description: `${BRAND.company} ${BRAND.event} — live, fair and transparent customer lucky draw.`,
   icons: { icon: asset('/favicon.svg') },
+  manifest: asset('/manifest.webmanifest'),
 };
 
 export const viewport: Viewport = {
@@ -26,7 +28,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <ServiceWorker />
+      </body>
     </html>
   );
 }

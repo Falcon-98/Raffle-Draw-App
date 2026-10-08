@@ -31,10 +31,12 @@ export function ClickMark({ className = 'brand-mark' }: { className?: string }) 
   );
 }
 
-export function BrandBlock({ eventTitle }: { eventTitle?: string }) {
+export function BrandBlock({ eventTitle, logo }: { eventTitle?: string; logo?: string }) {
+  // An uploaded logo (admin → Display settings) wins over the one configured in lib/config.ts.
+  const src = logo || (BRAND.logo ? asset(BRAND.logo) : null);
   return (
     <div className="brand">
-      {BRAND.logo ? <img className="brand-logo" src={asset(BRAND.logo)} alt={BRAND.company} /> : <ClickMark />}
+      {src ? <img className="brand-logo" src={src} alt={BRAND.company} /> : <ClickMark />}
       <div className="brand-text">
         <span className="brand-company">{BRAND.company}</span>
         <span className="brand-event">{eventTitle || BRAND.event}</span>

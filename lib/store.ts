@@ -25,6 +25,7 @@ export type Winner = {
   pool: number; // eligible participants at the moment of the draw
   fingerprint: string; // hash of the eligible pool
   requestId?: string; // the admin draw request that produced it (de-duplicates multiple displays)
+  forfeited?: boolean; // winner was not present; the prize was drawn again
 };
 
 export type Settings = {
@@ -35,8 +36,15 @@ export type Settings = {
   sound: boolean;
   showWinnersBoard: boolean;
   spinSeconds: number;
+  countdown: boolean; // 3-2-1 before the reel
   prizes: string[];
+  /** How many of each prize there are. Missing = 1. */
+  prizeQty: Record<string, number>;
+  /** After the last of a prize is drawn, move on to the next prize that has some left. */
+  autoAdvance: boolean;
   currentPrize: string;
+  /** Optional logo as a data URL (uploaded in the admin). */
+  logo?: string;
 };
 
 export type RaffleState = {
@@ -46,12 +54,13 @@ export type RaffleState = {
   updatedAt: number;
 };
 
-export type DisplayPhase = 'idle' | 'spinning' | 'winner';
+export type DisplayPhase = 'idle' | 'countdown' | 'spinning' | 'winner' | 'showcase';
 
 export type Command =
   | { type: 'draw'; requestId?: string }
   | { type: 'reset-view' }
   | { type: 'confetti' }
+  | { type: 'showcase' }
   | { type: 'status'; phase: DisplayPhase; at: number }
   | { type: 'ping' };
 
@@ -71,7 +80,10 @@ export const defaultState = (): RaffleState => ({
     sound: true,
     showWinnersBoard: true,
     spinSeconds: 7,
+    countdown: true,
     prizes: DEFAULT_PRIZES,
+    prizeQty: {},
+    autoAdvance: true,
     currentPrize: DEFAULT_PRIZES[0],
   },
   updatedAt: Date.now(),
@@ -158,9 +170,35 @@ export function useCommands(onCommand: (cmd: Command) => void) {
 /* --------------------------------------------------------------- helpers */
 
 export function eligible(s: RaffleState): Participant[] {
-  const won = new Set(s.winners.map((w) => w.participantId));
-  return s.participants.filter((p) => !p.excluded && !(s.settings.removeWinners && won.has(p.id)));
+  // A forfeited (not present) winner never comes back; real winners only leave when "one prize per person" is on.
+  const out = new Set(s.winners.filter((w) => w.forfeited || s.settings.removeWinners).map((w) => w.participantId));
+  return s.participants.filter((p) => !p.excluded && !out.has(p.id));
 }
+
+/** Winners that count (not forfeited). */
+export const activeWinners = (s: RaffleState) => s.winners.filter((w) => !w.forfeited);
+
+export const prizeQty = (s: RaffleState, prize: string) => Math.max(1, s.settings.prizeQty?.[prize] ?? 1);
+
+/** How many of a prize are still to be drawn. */
+export function prizeLeft(s: RaffleState, prize: string) {
+  return prizeQty(s, prize) - s.winners.filter((w) => !w.forfeited && w.prize === prize).length;
+}
+
+/** The prize to draw after `prize` ran out: the next one in the list (wrapping) that has some left. */
+export function nextPrize(s: RaffleState, prize: string): string | null {
+  const list = s.settings.prizes;
+  const start = list.indexOf(prize);
+  for (let i = 1; i <= list.length; i++) {
+    const p = list[(start + i + list.length) % list.length];
+    if (prizeLeft(s, p) > 0) return p;
+  }
+  return null;
+}
+
+/** Can the current prize be drawn? Prizes not in the list (e.g. all removed) are unlimited. */
+export const canDrawPrize = (s: RaffleState) =>
+  !s.settings.prizes.includes(s.settings.currentPrize) || prizeLeft(s, s.settings.currentPrize) > 0;
 
 export function uid() {
   const a = new Uint32Array(2);

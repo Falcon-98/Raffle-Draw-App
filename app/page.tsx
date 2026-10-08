@@ -20,16 +20,22 @@ import {
 } from '@/components/Icons';
 import {
   type DisplayPhase,
+  type RaffleState,
   type Winner,
+  activeWinners,
+  canDrawPrize,
   eligible,
   loadState,
+  nextPrize,
+  prizeLeft,
+  prizeQty,
   sendCommand,
   uid,
   useCommands,
   useRaffle,
 } from '@/lib/store';
 import { poolFingerprint, secureRandomInt } from '@/lib/fair';
-import { audioReady, fanfare, unlockAudio, whoosh } from '@/lib/sound';
+import { audioReady, fanfare, tick, unlockAudio, whoosh } from '@/lib/sound';
 
 const COLORS = ['#ff3d8b', '#8b5cf6', '#22d3ee', '#ffc542', '#34d399', '#ffffff'];
 
@@ -55,6 +61,7 @@ export default function DisplayPage() {
   const [fp, setFp] = useState('');
   const [toast, setToast] = useState('');
   const [soundOk, setSoundOk] = useState(true);
+  const [help, setHelp] = useState(false);
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
 
@@ -77,7 +84,8 @@ export default function DisplayPage() {
 
   /* ---------------------------------------------------------- the draw */
   const startDraw = useCallback(async (requestId: string = uid()) => {
-    if (phaseRef.current === 'spinning') return;
+    if (phaseRef.current === 'spinning' || phaseRef.current === 'countdown') return;
+    const prev = phaseRef.current;
     phaseRef.current = 'spinning';
 
     // Pick and save the winner. If more than one display window is open, they all receive the
@@ -88,7 +96,7 @@ export default function DisplayPage() {
       const p = eligible(s);
       const existing = s.winners.find((w) => w.requestId === requestId);
       if (existing) return { s, p, record: existing };
-      if (!p.length) return { s, p, record: null };
+      if (!p.length || !canDrawPrize(s)) return { s, p, record: null };
       const fingerprint = await poolFingerprint(p);
       const chosen = p[secureRandomInt(p.length)];
       const record: Winner = {
@@ -105,7 +113,15 @@ export default function DisplayPage() {
         requestId,
       };
       // Lock the result in BEFORE the animation, so it can't be re-rolled.
-      update((st) => ({ ...st, winners: [...st.winners, record] }));
+      update((st) => {
+        const next: RaffleState = { ...st, winners: [...st.winners, record] };
+        // That was the last of this prize: line up the next prize that has some left.
+        if (next.settings.autoAdvance && next.settings.prizes.includes(record.prize) && prizeLeft(next, record.prize) <= 0) {
+          const np = nextPrize(next, record.prize);
+          if (np) next.settings = { ...next.settings, currentPrize: np };
+        }
+        return next;
+      });
       return { s, p, record };
     };
     const { s, p, record } = navigator.locks
@@ -113,8 +129,14 @@ export default function DisplayPage() {
       : await pick();
 
     if (!record) {
-      phaseRef.current = 'idle';
-      flash(s.participants.length ? 'Everyone has already won or is excluded.' : 'No participants yet — add names in the admin panel.');
+      phaseRef.current = prev;
+      flash(
+        !s.participants.length
+          ? 'No participants yet — add names in the admin panel.'
+          : !p.length
+            ? 'Everyone has already won or is excluded.'
+            : `All “${s.settings.currentPrize}” prizes have been drawn. Pick another prize in the admin panel.`,
+      );
       return;
     }
 
@@ -122,9 +144,20 @@ export default function DisplayPage() {
     const sample = names.length > 400 ? Array.from({ length: 400 }, () => names[Math.floor(Math.random() * names.length)].name) : names.map((x) => x.name);
     setReelPool(sample);
     setCurrent(record);
-    setPhase('spinning');
-    if (s.settings.sound) whoosh();
+    if (s.settings.countdown) {
+      phaseRef.current = 'countdown';
+      setPhase('countdown');
+    } else {
+      setPhase('spinning');
+      if (s.settings.sound) whoosh();
+    }
   }, [flash, update]);
+
+  const onCountdownDone = useCallback(() => {
+    phaseRef.current = 'spinning';
+    setPhase('spinning');
+    if (loadState().settings.sound) whoosh();
+  }, []);
 
   const onReelDone = useCallback(() => {
     setPhase('winner');
@@ -133,9 +166,19 @@ export default function DisplayPage() {
   }, []);
 
   const resetView = useCallback(() => {
-    if (phaseRef.current === 'spinning') return;
+    if (phaseRef.current === 'spinning' || phaseRef.current === 'countdown') return;
     setPhase('idle');
     setCurrent(null);
+  }, []);
+
+  /** Full-screen list of every winner — for the end of the event. */
+  const toggleShowcase = useCallback((force?: boolean) => {
+    if (phaseRef.current === 'spinning' || phaseRef.current === 'countdown') return;
+    const open = force ?? phaseRef.current !== 'showcase';
+    if (open && !activeWinners(loadState()).length) return;
+    setCurrent(null);
+    setPhase(open ? 'showcase' : 'idle');
+    if (open) celebrate();
   }, []);
 
   /* ----------------------------------------------- admin ↔ display link */
@@ -143,6 +186,7 @@ export default function DisplayPage() {
     if (cmd.type === 'draw') void startDraw(cmd.requestId);
     else if (cmd.type === 'reset-view') resetView();
     else if (cmd.type === 'confetti') celebrate();
+    else if (cmd.type === 'showcase') toggleShowcase(true);
     else if (cmd.type === 'ping') sendCommand({ type: 'status', phase: phaseRef.current, at: Date.now() });
   });
 
@@ -161,12 +205,17 @@ export default function DisplayPage() {
         e.preventDefault();
         unlockAudio();
         void startDraw();
-      } else if (e.key === 'Escape') resetView();
-      else if (e.key.toLowerCase() === 'f') toggleFullscreen();
+      } else if (e.key === 'Escape') {
+        setHelp(false);
+        resetView();
+      } else if (e.key.toLowerCase() === 'f') toggleFullscreen();
+      else if (e.key.toLowerCase() === 'w') toggleShowcase();
+      else if (e.key.toLowerCase() === 'm') update((st) => ({ ...st, settings: { ...st.settings, sound: !st.settings.sound } }));
+      else if (e.key === '?' || e.key.toLowerCase() === 'h') setHelp((v) => !v);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [startDraw, resetView]);
+  }, [startDraw, resetView, toggleShowcase, update]);
 
   // Audio needs one interaction with this window.
   useEffect(() => {
@@ -197,9 +246,15 @@ export default function DisplayPage() {
     );
   }
 
-  const shownWinners = state.winners.filter((w) => !(phase === 'spinning' && current && w.id === current.id));
-  const showBoard = settings.showWinnersBoard && shownWinners.length > 0;
+  const drawing = phase === 'countdown' || phase === 'spinning';
+  // Keep the winner being drawn off the board until it is revealed.
+  const shownWinners = activeWinners(state).filter((w) => !(drawing && current && w.id === current.id));
+  const showBoard = settings.showWinnersBoard && shownWinners.length > 0 && phase !== 'showcase';
   const total = state.participants.length;
+  const prizeOk = canDrawPrize(state);
+  const listed = settings.prizes.includes(settings.currentPrize);
+  const qty = listed ? prizeQty(state, settings.currentPrize) : 1;
+  const left = listed ? prizeLeft(state, settings.currentPrize) : 1;
 
   return (
     <main className="stage">
@@ -207,7 +262,7 @@ export default function DisplayPage() {
       {settings.showBubbles && names.length > 0 && <Bubbles names={names} visible={phase === 'idle'} />}
 
       <header className="topbar">
-        <BrandBlock eventTitle={settings.eventTitle} />
+        <BrandBlock eventTitle={settings.eventTitle} logo={settings.logo} />
         <div className="top-actions">
           <span className="pill hide-sm">
             <span className="live-dot" /> LIVE DRAW
@@ -236,9 +291,10 @@ export default function DisplayPage() {
                 exit={{ opacity: 0, y: -20, scale: 0.97 }}
                 transition={{ duration: 0.5, ease: [0.2, 0.8, 0.2, 1] }}
               >
-                <span className="kicker">Now drawing</span>
+                <span className="kicker">{prizeOk ? 'Now drawing' : 'Draw complete'}</span>
                 <span className="prize-pill">
                   <IconGift /> {settings.currentPrize}
+                  {qty > 1 && prizeOk && <span className="prize-left">{left} of {qty} left</span>}
                 </span>
                 <h1 className="title">
                   <span className="grad-text">{settings.eventTitle}</span>
@@ -259,25 +315,78 @@ export default function DisplayPage() {
                         <span>In the draw</span>
                       </div>
                       <div className="stat">
-                        <b>{state.winners.length}</b>
+                        <b>{activeWinners(state).length}</b>
                         <span>Winners</span>
                       </div>
                     </div>
                     <button
                       className="draw-btn"
-                      disabled={!pool.length}
+                      disabled={!pool.length || !prizeOk}
                       onClick={() => {
                         unlockAudio();
                         void startDraw();
                       }}
                     >
-                      Start the draw
+                      {prizeOk ? 'Start the draw' : 'All prizes drawn'}
                     </button>
                     <span className="hint hide-sm">
                       or press <kbd>Space</kbd>
                     </span>
                   </>
                 )}
+              </motion.div>
+            )}
+
+            {phase === 'countdown' && current && (
+              <motion.div
+                key={`count-${current.id}`}
+                className="spin-wrap"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <span className="prize-pill">
+                  <IconGift /> {current.prize}
+                </span>
+                <Countdown sound={settings.sound} onDone={onCountdownDone} />
+                <span className="picking">Get ready…</span>
+              </motion.div>
+            )}
+
+            {phase === 'showcase' && (
+              <motion.div
+                key="showcase"
+                className="showcase"
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.5 }}
+              >
+                <Trophy className="trophy" />
+                <h1 className="title">
+                  <span className="grad-text">Our winners</span>
+                </h1>
+                <div className="showcase-grid">
+                  {groupByPrize(activeWinners(state), settings.prizes).map(([prize, ws]) => (
+                    <section key={prize} className="showcase-group">
+                      <h2>
+                        <IconGift /> {prize}
+                      </h2>
+                      <ol>
+                        {ws.map((w) => (
+                          <li key={w.id}>
+                            <span className="who">{w.name}</span>
+                            {(w.ticket || w.group) && <span className="what">{[w.ticket, w.group].filter(Boolean).join(' · ')}</span>}
+                          </li>
+                        ))}
+                      </ol>
+                    </section>
+                  ))}
+                </div>
+                <span className="hint hide-sm">
+                  Press <kbd>Esc</kbd> to go back
+                </span>
               </motion.div>
             )}
 
@@ -387,6 +496,26 @@ export default function DisplayPage() {
         </button>
       )}
 
+      <button className="pill help-chip hide-sm" onClick={() => setHelp((v) => !v)} aria-label="Keyboard shortcuts">
+        <kbd>?</kbd> Shortcuts
+      </button>
+
+      <AnimatePresence>
+        {help && (
+          <motion.div className="help-panel" role="dialog" aria-label="Keyboard shortcuts" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }}>
+            <h3>Keyboard shortcuts</h3>
+            <dl>
+              <dt><kbd>Space</kbd> / <kbd>Enter</kbd></dt><dd>Draw a winner</dd>
+              <dt><kbd>Esc</kbd></dt><dd>Back to the welcome screen</dd>
+              <dt><kbd>F</kbd></dt><dd>Full screen</dd>
+              <dt><kbd>W</kbd></dt><dd>Show all winners</dd>
+              <dt><kbd>M</kbd></dt><dd>Sound {settings.sound ? 'off' : 'on'}</dd>
+              <dt><kbd>?</kbd></dt><dd>Show / hide this list</dd>
+            </dl>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {toast && (
           <motion.div className="toast" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}>
@@ -441,5 +570,50 @@ function IconUsersSmall() {
       <path d="M16 4.5a3.5 3.5 0 0 1 0 7" />
       <path d="M18.5 14a6.5 6.5 0 0 1 3 6" />
     </svg>
+  );
+}
+
+/** Winners grouped by prize, in the order of the prize list (other prizes after). */
+function groupByPrize(ws: Winner[], order: string[]): [string, Winner[]][] {
+  const map = new Map<string, Winner[]>();
+  for (const p of order) map.set(p, []);
+  for (const w of [...ws].sort((a, b) => a.drawNo - b.drawNo)) {
+    if (!map.has(w.prize)) map.set(w.prize, []);
+    map.get(w.prize)!.push(w);
+  }
+  return [...map].filter(([, list]) => list.length > 0);
+}
+
+/** Big 3-2-1 before the reel. The winner is already locked in; this is only suspense. */
+function Countdown({ sound, onDone }: { sound: boolean; onDone: () => void }) {
+  const [n, setN] = useState(3);
+  const doneRef = useRef(onDone);
+  doneRef.current = onDone;
+  useEffect(() => {
+    if (sound) tick(0.2);
+    if (n === 0) {
+      doneRef.current();
+      return;
+    }
+    const t = setTimeout(() => setN((v) => v - 1), 900);
+    return () => clearTimeout(t);
+  }, [n, sound]);
+  return (
+    <div className="countdown" aria-live="assertive">
+      <AnimatePresence mode="popLayout">
+        {n > 0 && (
+          <motion.span
+            key={n}
+            className="grad-text"
+            initial={{ scale: 2.2, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.4, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 220, damping: 16 }}
+          >
+            {n}
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
