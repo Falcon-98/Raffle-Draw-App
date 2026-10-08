@@ -76,33 +76,50 @@ export default function DisplayPage() {
   }, []);
 
   /* ---------------------------------------------------------- the draw */
-  const startDraw = useCallback(async () => {
+  const startDraw = useCallback(async (requestId: string = uid()) => {
     if (phaseRef.current === 'spinning') return;
-    const s = loadState(); // always draw from the freshest saved list
-    const p = eligible(s);
-    if (!p.length) {
+    phaseRef.current = 'spinning';
+
+    // Pick and save the winner. If more than one display window is open, they all receive the
+    // admin's draw command: the lock makes them take turns, and the second one finds the record
+    // the first one saved for the same request and shows that instead of drawing again.
+    const pick = async () => {
+      const s = loadState(); // always draw from the freshest saved list
+      const p = eligible(s);
+      const existing = s.winners.find((w) => w.requestId === requestId);
+      if (existing) return { s, p, record: existing };
+      if (!p.length) return { s, p, record: null };
+      const fingerprint = await poolFingerprint(p);
+      const chosen = p[secureRandomInt(p.length)];
+      const record: Winner = {
+        id: uid(),
+        participantId: chosen.id,
+        name: chosen.name,
+        ticket: chosen.ticket,
+        group: chosen.group,
+        prize: s.settings.currentPrize,
+        at: new Date().toISOString(),
+        drawNo: s.winners.reduce((m, w) => Math.max(m, w.drawNo), 0) + 1,
+        pool: p.length,
+        fingerprint,
+        requestId,
+      };
+      // Lock the result in BEFORE the animation, so it can't be re-rolled.
+      update((st) => ({ ...st, winners: [...st.winners, record] }));
+      return { s, p, record };
+    };
+    const { s, p, record } = navigator.locks
+      ? await navigator.locks.request('click2026:draw', pick)
+      : await pick();
+
+    if (!record) {
+      phaseRef.current = 'idle';
       flash(s.participants.length ? 'Everyone has already won or is excluded.' : 'No participants yet — add names in the admin panel.');
       return;
     }
-    phaseRef.current = 'spinning';
-    const fingerprint = await poolFingerprint(p);
-    const chosen = p[secureRandomInt(p.length)];
-    const record: Winner = {
-      id: uid(),
-      participantId: chosen.id,
-      name: chosen.name,
-      ticket: chosen.ticket,
-      group: chosen.group,
-      prize: s.settings.currentPrize,
-      at: new Date().toISOString(),
-      drawNo: s.winners.length + 1,
-      pool: p.length,
-      fingerprint,
-    };
-    // Lock the result in BEFORE the animation, so it can't be re-rolled.
-    update((st) => ({ ...st, winners: [...st.winners, record] }));
 
-    const sample = p.length > 400 ? Array.from({ length: 400 }, () => p[Math.floor(Math.random() * p.length)].name) : p.map((x) => x.name);
+    const names = p.length ? p : s.participants;
+    const sample = names.length > 400 ? Array.from({ length: 400 }, () => names[Math.floor(Math.random() * names.length)].name) : names.map((x) => x.name);
     setReelPool(sample);
     setCurrent(record);
     setPhase('spinning');
@@ -123,7 +140,7 @@ export default function DisplayPage() {
 
   /* ----------------------------------------------- admin ↔ display link */
   useCommands((cmd) => {
-    if (cmd.type === 'draw') void startDraw();
+    if (cmd.type === 'draw') void startDraw(cmd.requestId);
     else if (cmd.type === 'reset-view') resetView();
     else if (cmd.type === 'confetti') celebrate();
     else if (cmd.type === 'ping') sendCommand({ type: 'status', phase: phaseRef.current, at: Date.now() });

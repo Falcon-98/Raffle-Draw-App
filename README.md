@@ -9,31 +9,46 @@ Everything runs in the browser. There is no server and no database, so nothing t
 
 ---
 
-## 1. Put it on GitHub Pages
+## 1. Live site (GitHub Pages)
 
-1. Create a new repository on GitHub (for example `click-2026-raffle`) and push this folder to the `main` branch:
-   ```bash
-   git init
-   git add .
-   git commit -m "Click 2026 lucky draw"
-   git branch -M main
-   git remote add origin https://github.com/<your-user-or-org>/click-2026-raffle.git
-   git push -u origin main
-   ```
-2. In the repository go to **Settings → Pages → Build and deployment → Source** and choose **GitHub Actions**.
-3. Set the admin PIN: **Settings → Secrets and variables → Actions → New repository secret**, name `ADMIN_PIN`, value e.g. `G26-7731`. (Without it the PIN is `click2026`.)
-4. Push any change (or run the workflow from the **Actions** tab). After a minute or two the site is live at
-   - Display: `https://<user>.github.io/click-2026-raffle/`
-   - Admin: `https://<user>.github.io/click-2026-raffle/admin/`
+| | URL |
+|---|---|
+| Live display | https://falcon-98.github.io/Raffle-Draw-App/ |
+| Admin console | https://falcon-98.github.io/Raffle-Draw-App/admin/ |
 
-The workflow (`.github/workflows/deploy.yml`) works out the URL prefix automatically. For a `<user>.github.io` repo or a custom domain it uses no prefix (for a custom domain add a repository *variable* `CUSTOM_DOMAIN` with any value, plus the usual `CNAME` file in `public/`).
+Every push to `main` builds the site and publishes it with GitHub Actions (`.github/workflows/deploy.yml`). Progress is visible in the repository's **Actions** tab; a deploy takes about a minute.
+
+### One-time setup (repository owner)
+
+1. **Settings → Pages → Build and deployment → Source: choose _GitHub Actions_.**
+   This is required. If it is left on *Deploy from a branch*, GitHub also runs its own Jekyll build of the raw source code after every push and publishes that on top of the app — the URL then shows this README instead of the raffle.
+2. Set the admin PIN: **Settings → Secrets and variables → Actions → New repository secret**, name `ADMIN_PIN`, value e.g. `G26-7731`. Without it the PIN is `click2026`. The PIN is baked in at build time, so after adding or changing the secret, re-run the deploy (**Actions → Deploy to GitHub Pages → Run workflow**).
+3. Push to `main` (or use **Run workflow**). When the run is green, open the URLs above.
+
+### Deploying from a fork or a renamed repository
+
+The workflow works out the URL prefix from the repository name, so a fork or rename needs no code changes — the site appears at `https://<user>.github.io/<repo>/`. For a `<user>.github.io` repository, or a custom domain, it uses no prefix (for a custom domain add a repository *variable* `CUSTOM_DOMAIN` with any value, plus the usual `CNAME` file in `public/`).
+
+### Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| The URL shows this README / a plain document | Pages source is *Deploy from a branch*. Switch it to **GitHub Actions** (step 1) and re-run the workflow. |
+| Workflow fails at *configure-pages* ("Get Pages site failed") | Pages is not enabled yet — do step 1. |
+| Workflow fails at *deploy* with an environment protection error | **Settings → Environments → github-pages** must allow the `main` branch (the default). |
+| Page loads but has no styling / blank | Hard-refresh (Ctrl+Shift+R). If it persists, check the run used the right repository name. |
+| Admin PIN not accepted | The secret is applied at build time — re-run the workflow after setting `ADMIN_PIN`. |
 
 ## 2. Run it on your computer (optional)
+
+Needs Node.js 20.9 or newer (CI uses Node 22).
 
 ```bash
 npm install
 npm run dev        # http://localhost:3000 and http://localhost:3000/admin/
+npm run typecheck  # TypeScript check
 npm run build      # static site in ./out
+npm run preview    # serve ./out at http://localhost:3000
 ```
 
 ## 3. On the event day
@@ -57,7 +72,7 @@ Click **Excel template** in the admin to download the ready-made file.
 | Nimal Perera | C26-0001 | Colombo |
 
 - Accepts **.xlsx** and **.csv**. (Old **.xls**: open it in Excel and *Save As → Excel Workbook*.)
-- The first sheet is read. A header row is detected automatically; without one, column A is the name, B the ticket, C the branch.
+- The first sheet is read. A header row is detected automatically (a column called *Name*, *Full name*, *Customer name*, … is the name; *Ticket*, *ID*, *No.*, *Code* is the ticket; *Branch*, *Department*, *City*, … is the branch — so a "Customer ID" column is never mistaken for the name). Without a header, column A is the name, B the ticket, C the branch.
 - **Copy & paste** works with plain names (one per line) or rows copied straight out of Excel.
 - Duplicates are skipped — same Ticket/ID, or same name when there is no ID. Before anything is added you see a preview with counts, and you choose **Add** or **Replace current list**.
 
@@ -70,6 +85,8 @@ Click **Excel template** in the admin to download the ready-made file.
 - **Pool fingerprint** — the footer shows a short SHA-256 fingerprint of the eligible list. It only changes if someone is added or removed, so you can show it before the first draw and anyone can see it stays consistent. Each winner record stores the fingerprint and pool size at that moment.
 - **Audit export** — **Winners → Excel** gives draw number, prize, name, ticket, time, pool size and fingerprint.
 - **One prize per person** (on by default) automatically removes winners from later draws.
+- **No double draws** — if the display is accidentally open in two windows, a single *Draw a winner* click still produces exactly one winner; both windows show the same name.
+- **Stable draw numbers** — undoing a win never causes a later draw to reuse an earlier draw number.
 
 ## 6. Customising
 

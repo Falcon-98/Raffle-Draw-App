@@ -24,6 +24,7 @@ export type Winner = {
   drawNo: number;
   pool: number; // eligible participants at the moment of the draw
   fingerprint: string; // hash of the eligible pool
+  requestId?: string; // the admin draw request that produced it (de-duplicates multiple displays)
 };
 
 export type Settings = {
@@ -48,7 +49,7 @@ export type RaffleState = {
 export type DisplayPhase = 'idle' | 'spinning' | 'winner';
 
 export type Command =
-  | { type: 'draw' }
+  | { type: 'draw'; requestId?: string }
   | { type: 'reset-view' }
   | { type: 'confetti' }
   | { type: 'status'; phase: DisplayPhase; at: number }

@@ -35,6 +35,10 @@ jobs:
             echo "path=/$REPO" >> "$GITHUB_OUTPUT"
           fi
 
+      # Fails with a clear message if Pages is not enabled for this repository.
+      # Settings → Pages → Source must be "GitHub Actions" (not "Deploy from a branch").
+      - uses: actions/configure-pages@v5
+
       - run: npm ci
 
       - name: Build static site

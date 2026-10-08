@@ -19,7 +19,7 @@ import {
 } from '@/components/Icons';
 import { BRAND, asset } from '@/lib/config';
 import { downloadWinners } from '@/lib/excel';
-import { type DisplayPhase, type RaffleState, defaultState, eligible, sendCommand, useCommands, useRaffle } from '@/lib/store';
+import { type DisplayPhase, type RaffleState, defaultState, eligible, sendCommand, uid, useCommands, useRaffle } from '@/lib/store';
 
 export default function AdminPage() {
   return (
@@ -159,7 +159,7 @@ function DrawControl({
       <button
         className="btn primary big"
         disabled={!online || !pool.length || phase === 'spinning'}
-        onClick={() => sendCommand({ type: 'draw' })}
+        onClick={() => sendCommand({ type: 'draw', requestId: uid() })}
       >
         <IconSparkle /> {phase === 'spinning' ? 'Drawing…' : `Draw a winner for “${state.settings.currentPrize}”`}
       </button>
