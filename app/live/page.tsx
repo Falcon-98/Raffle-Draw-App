@@ -14,6 +14,7 @@ import { Countdown, WinnerName, celebrate, groupByPrize } from '@/components/Sta
 import { IconFinger, IconGift, IconShield, IconTrophy, Trophy } from '@/components/Icons';
 import { type LiveDraw, type LiveSnapshot, type LiveState, liveGet, normalizeServer } from '@/lib/live';
 import { fanfare, unlockAudio, whoosh } from '@/lib/sound';
+import { DEFAULT_LIVE_SERVER } from '@/lib/config';
 
 type Conn = 'connecting' | 'live' | 'reconnecting' | 'ended' | 'notfound' | 'nolink' | 'waiting';
 type Phase = 'idle' | 'countdown' | 'spinning' | 'winner' | 'showcase';
@@ -93,7 +94,7 @@ export default function LivePage() {
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const code = (q.get('r') || '').trim().toUpperCase();
-    const server = normalizeServer(q.get('s') || process.env.NEXT_PUBLIC_LIVE_SERVER_URL || window.location.origin);
+    const server = normalizeServer(q.get('s') || DEFAULT_LIVE_SERVER);
     if (!code) {
       setConn('nolink');
       return;

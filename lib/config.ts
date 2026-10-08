@@ -18,6 +18,12 @@ export const BRAND = {
  * Note: on a static site this is a soft gate that keeps the audience out of the admin
  * screen, not real security — never put private data in the participant list.
  */
+/**
+ * Default live server for the online live view (the Cloudflare Worker in cloudflare/).
+ * Override with NEXT_PUBLIC_LIVE_SERVER_URL at build time, or change it in Admin → Online live view.
+ */
+export const DEFAULT_LIVE_SERVER = process.env.NEXT_PUBLIC_LIVE_SERVER_URL || 'https://raffle-live.inbox-ashen.workers.dev';
+
 export const ADMIN_PIN = process.env.NEXT_PUBLIC_ADMIN_PIN || 'click2026';
 
 export const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || '';

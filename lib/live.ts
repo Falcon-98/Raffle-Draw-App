@@ -6,7 +6,7 @@
  * on their own device (app/live/page.tsx).
  */
 import { useEffect, useRef, useState } from 'react';
-import { asset } from './config';
+import { DEFAULT_LIVE_SERVER, asset } from './config';
 import {
   type CompanyDisplay,
   type DisplayPhase,
@@ -168,11 +168,12 @@ export const liveGet = (server: string, code: string) =>
 export const liveClose = (server: string, room: LiveRoom) =>
   call<{ ok: boolean }>(`${server}/api/rooms/${room.code}`, { method: 'DELETE', headers: { Authorization: `Bearer ${room.key}` } });
 
-/** The link the audience opens. The server address rides along unless it is this same site. */
+/** The link the audience opens. The server address rides along unless it is the default one or this same site. */
 export function viewerUrl(server: string, code: string) {
   const here = typeof window === 'undefined' ? '' : window.location.origin;
   const u = `${here}${asset('/live/')}?r=${code}`;
-  return server && server !== here ? `${u}&s=${encodeURIComponent(server)}` : u;
+  const s = normalizeServer(server);
+  return s && s !== here && s !== normalizeServer(DEFAULT_LIVE_SERVER) ? `${u}&s=${encodeURIComponent(s)}` : u;
 }
 
 /* ---------------------------------------------------------- publisher */
