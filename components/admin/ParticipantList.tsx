@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { IconBan, IconDownload, IconSearch, IconTrash } from '@/components/Icons';
 import { Switch } from './ui';
 import { downloadParticipants } from '@/lib/excel';
-import { type RaffleState, normalize } from '@/lib/store';
+import { type RaffleState, eligible, normalize } from '@/lib/store';
 
 type Filter = 'all' | 'in' | 'out' | 'won';
 const PAGE = 250;
@@ -23,18 +23,20 @@ export default function ParticipantList({
   const [bulk, setBulk] = useState('');
   const [bulkResult, setBulkResult] = useState('');
 
-  const wonIds = useMemo(() => new Set(state.winners.map((w) => w.participantId)), [state.winners]);
+  const wonIds = useMemo(() => new Set(state.winners.filter((w) => !w.forfeited).map((w) => w.participantId)), [state.winners]);
+  const forfeitIds = useMemo(() => new Set(state.winners.filter((w) => w.forfeited).map((w) => w.participantId)), [state.winners]);
+  const inDraw = useMemo(() => new Set(eligible(state).map((p) => p.id)), [state]);
 
   const list = useMemo(() => {
     const nq = normalize(q);
     return state.participants.filter((p) => {
-      if (filter === 'in' && (p.excluded || (state.settings.removeWinners && wonIds.has(p.id)))) return false;
+      if (filter === 'in' && !inDraw.has(p.id)) return false;
       if (filter === 'out' && !p.excluded) return false;
       if (filter === 'won' && !wonIds.has(p.id)) return false;
       if (!nq) return true;
       return normalize(`${p.name} ${p.ticket ?? ''} ${p.group ?? ''}`).includes(nq);
     });
-  }, [state.participants, state.settings.removeWinners, filter, q, wonIds]);
+  }, [state.participants, filter, q, wonIds, inDraw]);
 
   const setExcluded = (id: string, excluded: boolean) =>
     update((s) => ({ ...s, participants: s.participants.map((p) => (p.id === id ? { ...p, excluded } : p)) }));
@@ -186,7 +188,7 @@ export default function ParticipantList({
                       <td>{p.ticket ?? '—'}</td>
                       <td className="hide-sm">{p.group ?? '—'}</td>
                       <td>
-                        {won ? <span className="badge win">Winner</span> : p.excluded ? <span className="badge out">Excluded</span> : <span className="badge in">Eligible</span>}
+                        {won ? <span className="badge win">Winner</span> : forfeitIds.has(p.id) ? <span className="badge out">Not present</span> : p.excluded ? <span className="badge out">Excluded</span> : <span className="badge in">Eligible</span>}
                       </td>
                       <td>
                         <button className="icon-btn" style={{ width: 32, height: 32 }} onClick={() => remove(p.id, p.name)} aria-label={`Remove ${p.name}`} title="Remove">

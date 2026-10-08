@@ -7,6 +7,30 @@ A colourful, animated raffle for the **Click 2026** customer event, built with *
 
 Everything runs in the browser. There is no server and no database, so nothing to pay for or maintain.
 
+### Features
+
+**Running the draw**
+- Certified-random winner (Web Crypto), saved *before* the reel spins; the reel always lands on that winner
+- 3-2-1 countdown, slot-machine reel, winner reveal with confetti and fanfare (all synthesised, no audio files)
+- **Prize quantities** — e.g. *3rd Prize × 5*; the screen shows "3 of 5 left", a used-up prize can't be drawn again, and the next prize is selected automatically
+- **Not present → redraw** — mark a winner as absent; they stay in the record, can't win again, and the prize goes back up for a redraw
+- **Winners showcase** — a full-screen "Our winners" slide grouped by prize for the finale
+- Winners board, live entry counts, undo, one-prize-per-person
+- Keyboard control on the display: <kbd>Space</kbd> draw · <kbd>Esc</kbd> back · <kbd>F</kbd> full screen · <kbd>W</kbd> winners · <kbd>M</kbd> sound · <kbd>?</kbd> help
+
+**Participants**
+- Excel (.xlsx) / CSV upload with header detection, copy-paste from Excel, or typing; duplicate detection and a preview before anything is added
+- Exclude people one by one, by pasted list, or by search; demo data with 150 fictional people
+
+**Trust & records**
+- Pool fingerprint on screen, audit trail per draw (time, pool size, fingerprint), Excel export of winners with status
+- PIN-protected admin, JSON backup & restore
+
+**Event-proof**
+- Works **offline** after the first visit (service worker) and can be installed as an app
+- Upload your **logo** from the admin; title, subtitle, sound, spin time and more change live
+- Admin and display stay in sync in the same browser; opening the display twice can't cause a double draw
+
 ---
 
 ## 1. Live site (GitHub Pages)
@@ -66,11 +90,16 @@ npm run preview    # serve ./out at http://localhost:3000
 2. Open the **admin** page in Chrome or Edge on the laptop screen and unlock it with the PIN.
 3. Click **Open live display**. Drag that new window to the projector and press **F** for full screen. The admin header turns green: **Display connected**.
 4. Click once anywhere on the display window so the browser allows sound.
-5. Pick the prize chip, then press **Draw a winner**. (On the display itself, **Space** also draws and **Esc** returns to the welcome screen.)
+5. Set up the prizes (**Prizes** card: name, how many, order). Pick the prize chip, then press **Draw a winner**. On the display itself, **Space** also draws, **Esc** returns to the welcome screen and **?** lists all shortcuts.
+6. **Winner not here?** In **Winners**, press **Not present** next to their name. They are kept in the record as *Not present* and can't be drawn again, and the same prize is selected so you can draw again straight away.
+7. When a prize runs out the next one is selected automatically (turn off *Next prize automatically* in *Display settings* to choose yourself). When everything has been drawn the display shows **All prizes drawn**.
+8. For the finale press **Show all winners** (or **W** on the display) for a full-screen list of every winner, grouped by prize.
 
 > **Both windows must be in the same browser on the same computer.** They talk to each other through the browser (BroadcastChannel + localStorage), which is why no server is needed. A phone opening the public link sees its own, empty copy — that is expected.
 
 Data is saved automatically in the browser. Use **Backup & reset → Export backup** before the event, and keep the file. To move the draw to another laptop, restore that file there.
+
+**No internet at the venue?** Open both the display and the admin page once while online (on the laptop you will use). The site is then stored in the browser and keeps working offline, including fonts. Chrome and Edge can also install it as an app (install icon in the address bar).
 
 ## 4. Participant list
 
@@ -97,21 +126,24 @@ Click **Excel template** in the admin to download the ready-made file.
 - **One prize per person** (on by default) automatically removes winners from later draws.
 - **No double draws** — if the display is accidentally open in two windows, a single *Draw a winner* click still produces exactly one winner; both windows show the same name.
 - **Stable draw numbers** — undoing a win never causes a later draw to reuse an earlier draw number.
+- **Absent winners stay on record** — *Not present* never deletes a draw; the Excel export shows it as "Not present (redrawn)" next to the redraw.
 
 ## 6. Customising
 
 | What | Where |
 |---|---|
-| Company name, event name, tagline, logo | `lib/config.ts` (put a logo in `public/brand/` and set `logo: '/brand/logo.png'`) |
-| Default prize list | `lib/config.ts` → `DEFAULT_PRIZES` (also editable live in the admin) |
+| Logo | Admin → *Display settings → Logo* (live, stored in the browser and in backups), or for a permanent default put a file in `public/brand/` and set `logo: '/brand/logo.png'` in `lib/config.ts` |
+| Company name, event name, tagline | `lib/config.ts` |
+| Default prize list | `lib/config.ts` → `DEFAULT_PRIZES` (names, quantities and order are editable live in the admin) |
 | Colours, fonts, animation | `app/globals.css` (tokens at the top) |
-| Title, subtitle, bubbles, sound, spin time, winners board | Admin → *Display settings* (live) |
+| Title, subtitle, bubbles, countdown, auto next prize, sound, spin time, winners board | Admin → *Display settings* (live) |
 
 ## 7. Good to know
 
 - The admin PIN is a *soft* gate that keeps the audience out of the admin screen. A static site cannot hide data from someone determined, so do not include phone numbers, NICs or other private data in the list — names and ticket numbers are enough.
 - Large lists are fine: thousands of names import in a second; the bubbles show them in rotating groups; the reel samples from the pool.
-- Fonts load from Google Fonts. If the venue has no internet the page still works with system fonts — open the site once beforehand while online so it is cached, or run it locally with `npm run build && npm run preview`.
+- Fonts load from Google Fonts and are cached for offline use after the first visit. Without that visit and without internet, the page still works with system fonts. You can also run it locally with `npm run build && npm run preview`.
+- After a new deploy, the next online visit loads the new version automatically (pages are always fetched fresh when online).
 
 ## Project structure
 
@@ -124,6 +156,7 @@ components/
   Bubbles.tsx         Floating name bubbles
   Reel.tsx            Slot-machine reel
   Brand.tsx, Icons.tsx
+  ServiceWorker.tsx   Registers the offline service worker
   admin/              Import panel, participant list, PIN gate, switches
 lib/
   store.ts            State, localStorage + cross-window sync
@@ -133,5 +166,7 @@ lib/
   config.ts           Branding and defaults
 public/
   sample-participants.csv   150 fictional participants (the "Demo data" button)
+  sw.js                     Offline cache (service worker)
+  manifest.webmanifest      Install-as-app details
 .github/workflows/deploy.yml   Build & deploy to GitHub Pages
 ```

@@ -132,7 +132,7 @@ export async function downloadTemplate() {
 
 export async function downloadWinners(winners: Winner[]) {
   const { default: writeXlsxFile } = await import('write-excel-file/browser');
-  const head = ['Draw #', 'Prize', 'Winner', 'Ticket / ID', 'Branch / Department', 'Drawn at', 'Eligible pool', 'Pool fingerprint'];
+  const head = ['Draw #', 'Prize', 'Winner', 'Ticket / ID', 'Branch / Department', 'Status', 'Drawn at', 'Eligible pool', 'Pool fingerprint'];
   const data = [
     head.map((value) => ({ value, ...HEAD })),
     ...winners.map((w) =>
@@ -142,6 +142,7 @@ export async function downloadWinners(winners: Winner[]) {
         w.name,
         w.ticket ?? '',
         w.group ?? '',
+        w.forfeited ? 'Not present (redrawn)' : 'Winner',
         new Date(w.at).toLocaleString(),
         String(w.pool),
         w.fingerprint,
@@ -150,7 +151,7 @@ export async function downloadWinners(winners: Winner[]) {
   ];
   await writeXlsxFile(data, {
     sheet: 'Winners',
-    columns: [{ width: 8 }, { width: 18 }, { width: 30 }, { width: 14 }, { width: 22 }, { width: 22 }, { width: 13 }, { width: 18 }],
+    columns: [{ width: 8 }, { width: 18 }, { width: 30 }, { width: 14 }, { width: 22 }, { width: 22 }, { width: 22 }, { width: 13 }, { width: 18 }],
     stickyRowsCount: 1,
   }).toFile(`Click2026-Winners-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
