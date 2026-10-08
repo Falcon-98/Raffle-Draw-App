@@ -147,9 +147,18 @@ export class Room implements DurableObject {
     return this.ctx.storage.get<Stored>('room');
   }
 
+  /**
+   * Write to one viewer. A viewer who left (e.g. refreshed the page) may not be noticed at once,
+   * and writing to its stream can then wait forever — so give up after a few seconds and drop it,
+   * instead of holding up everyone else (and the big screen's next update).
+   */
   private async send(w: WritableStreamDefaultWriter<Uint8Array>, chunk: string) {
     try {
-      await w.write(enc.encode(chunk));
+      const ok = await Promise.race([
+        w.write(enc.encode(chunk)).then(() => true),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 5000)),
+      ]);
+      if (!ok) this.drop(w);
     } catch {
       this.drop(w);
     }
@@ -168,7 +177,8 @@ export class Room implements DurableObject {
   private async broadcast(room?: Stored | null) {
     const r = room ?? (await this.load());
     if (!r) return;
-    const msg = `data: ${JSON.stringify({ state: r.state, updatedAt: r.updatedAt, viewers: this.viewers.size })}\n\n`;
+    // `now` lets viewers line their clocks up with the big screen (see app/live/page.tsx).
+    const msg = `data: ${JSON.stringify({ state: r.state, updatedAt: r.updatedAt, viewers: this.viewers.size, now: Date.now() })}\n\n`;
     await Promise.all([...this.viewers].map((w) => this.send(w, msg)));
   }
 
@@ -223,7 +233,7 @@ export class Room implements DurableObject {
     }
     if (path === '/events') return json(405, { error: 'method not allowed' });
 
-    if (req.method === 'GET') return json(200, { state: room.state, updatedAt: room.updatedAt, viewers: this.viewers.size });
+    if (req.method === 'GET') return json(200, { state: room.state, updatedAt: room.updatedAt, viewers: this.viewers.size, now: Date.now() });
 
     if (req.method === 'PUT') {
       if (!(await this.authorised(req, room))) return json(401, { error: 'Not allowed to publish to this room' });
@@ -239,7 +249,8 @@ export class Room implements DurableObject {
       }
       const next: Stored = { ...room, state, updatedAt: Date.now() };
       await this.ctx.storage.put('room', next);
-      await this.broadcast(next);
+      // Answer the big screen straight away; viewers are updated in the background.
+      void this.broadcast(next);
       return json(200, { ok: true, updatedAt: next.updatedAt, viewers: this.viewers.size });
     }
 

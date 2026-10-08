@@ -73,18 +73,45 @@ export function groupByPrize<W extends { prize: string; drawNo: number }>(ws: W[
   return [...map].filter(([, list]) => list.length > 0);
 }
 
-/** Big 3-2-1 before the reel. The winner is already locked in; this is only suspense. */
-export function Countdown({ sound, onDone }: { sound: boolean; onDone: () => void }) {
-  const [n, setN] = useState(3);
+/** Length of the 3-2-1 countdown, in ms. */
+export const COUNTDOWN_MS = 2700;
+const STEP = COUNTDOWN_MS / 3;
+
+/**
+ * Big 3-2-1 before the reel. The winner is already locked in; this is only suspense.
+ * `startedAtMs` (epoch ms) makes it join part-way (a live viewer arriving mid-countdown);
+ * `onStart` reports when it actually appeared (the display sends that to live viewers).
+ */
+export function Countdown({
+  sound,
+  onDone,
+  startedAtMs,
+  onStart,
+}: {
+  sound: boolean;
+  onDone: () => void;
+  startedAtMs?: number | null;
+  onStart?: (atMs: number) => void;
+}) {
+  const skip = useRef(startedAtMs ? Math.max(0, Math.min(COUNTDOWN_MS, Date.now() - startedAtMs)) : 0);
+  const [n, setN] = useState(3 - Math.floor(skip.current / STEP));
+  const firstWait = useRef(STEP - (skip.current % STEP));
   const doneRef = useRef(onDone);
   doneRef.current = onDone;
+  const startRef = useRef(onStart);
+  startRef.current = onStart;
   useEffect(() => {
-    if (sound) tick(0.2);
-    if (n === 0) {
+    startRef.current?.(Date.now() - skip.current);
+  }, []);
+  useEffect(() => {
+    if (n <= 0) {
       doneRef.current();
       return;
     }
-    const t = setTimeout(() => setN((v) => v - 1), 900);
+    if (sound) tick(0.2);
+    const wait = firstWait.current;
+    firstWait.current = STEP;
+    const t = setTimeout(() => setN((v) => v - 1), wait);
     return () => clearTimeout(t);
   }, [n, sound]);
   return (

@@ -5,10 +5,10 @@ import Link from 'next/link';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Background, BrandBlock } from '@/components/Brand';
 import Bubbles from '@/components/Bubbles';
-import Reel from '@/components/Reel';
+import Reel, { buildReel } from '@/components/Reel';
 import { Countdown, WinnerName, celebrate, groupByPrize } from '@/components/Stage';
 import QrCode from '@/components/QrCode';
-import { normalizeServer, useLivePublisher, viewerUrl } from '@/lib/live';
+import { type DrawShow, normalizeServer, useLivePublisher, viewerUrl } from '@/lib/live';
 import {
   IconExpand,
   IconFinger,
@@ -43,7 +43,9 @@ export default function DisplayPage() {
   const { state, update } = useRaffle();
   const [phase, setPhase] = useState<DisplayPhase>('idle');
   const [current, setCurrent] = useState<Winner | null>(null);
-  const [reelPool, setReelPool] = useState<string[]>([]);
+  // The show for the current draw: the exact reel sequence and when each part started
+  // (also sent to the online live view, so phones show the same names in sync).
+  const [show, setShow] = useState<DrawShow | null>(null);
   const [fp, setFp] = useState('');
   const [toast, setToast] = useState('');
   const [soundOk, setSoundOk] = useState(true);
@@ -65,7 +67,7 @@ export default function DisplayPage() {
   }, [pool]);
 
   // Online live view: send what is on this screen to viewers' own devices.
-  useLivePublisher(state, { phase, current, reelPool, fingerprint: fp });
+  useLivePublisher(state, { phase, current, show, fingerprint: fp });
 
   const flash = useCallback((msg: string) => {
     setToast(msg);
@@ -132,7 +134,9 @@ export default function DisplayPage() {
 
     const names = p.length ? p : s.participants;
     const sample = names.length > 400 ? Array.from({ length: 400 }, () => names[Math.floor(Math.random() * names.length)].name) : names.map((x) => x.name);
-    setReelPool(sample);
+    const spinMs = s.settings.spinSeconds * 1000;
+    // countdownAt / spinAt are filled in when the countdown and the reel actually appear.
+    setShow({ ...buildReel(sample, record.name, spinMs), spinMs, countdown: s.settings.countdown });
     setCurrent(record);
     if (s.settings.countdown) {
       phaseRef.current = 'countdown';
@@ -358,7 +362,11 @@ export default function DisplayPage() {
                 <span className="prize-pill">
                   <IconGift /> {current.prize}
                 </span>
-                <Countdown sound={settings.sound} onDone={onCountdownDone} />
+                <Countdown
+                  sound={settings.sound}
+                  onDone={onCountdownDone}
+                  onStart={(t) => setShow((sh) => (sh ? { ...sh, countdownAt: t } : sh))}
+                />
                 <span className="picking">Get ready…</span>
               </motion.div>
             )}
@@ -411,13 +419,16 @@ export default function DisplayPage() {
                 <span className="prize-pill">
                   <IconGift /> {current.prize}
                 </span>
-                <Reel
-                  pool={reelPool}
-                  winnerName={current.name}
-                  durationMs={settings.spinSeconds * 1000}
-                  sound={settings.sound}
-                  onDone={onReelDone}
-                />
+                {show && (
+                  <Reel
+                    items={show.items}
+                    winIndex={show.winIndex}
+                    durationMs={show.spinMs}
+                    sound={settings.sound}
+                    onDone={onReelDone}
+                    onStart={(t) => setShow((sh) => (sh ? { ...sh, spinAt: t } : sh))}
+                  />
+                )}
                 <span className="picking">
                   Picking <b>1</b> lucky winner from <b>{current.pool.toLocaleString()}</b> participants…
                 </span>
