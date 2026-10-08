@@ -2,17 +2,20 @@
   "name": "click-2026-raffle",
   "version": "1.0.0",
   "private": true,
-  "description": "Guardian Click 2026 — live raffle draw (display + admin), static Next.js for GitHub Pages",
+  "description": "Guardian Click 2026 \u2014 live raffle draw (display + admin), static Next.js for GitHub Pages",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "preview": "npx serve out",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "live": "node --env-file-if-exists=.env server/live-server.mjs",
+    "start": "npm run build && npm run live"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.4",
     "framer-motion": "^14.0.0",
     "next": "^16.4.0",
+    "qrcode-generator": "^1.5.2",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "read-excel-file": "^9.3.12",
@@ -24,5 +27,8 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=22.9"
   }
 }

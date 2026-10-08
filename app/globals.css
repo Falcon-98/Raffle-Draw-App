@@ -1092,6 +1092,84 @@ kbd {
   color: var(--muted);
 }
 
+/* Join-live QR on the big screen */
+.join-qr {
+  position: fixed !important; /* beats .stage > * { position: relative } */
+  right: 16px;
+  bottom: 60px;
+  z-index: 35 !important;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px 10px 10px;
+  border-radius: 16px;
+  background: rgba(18, 14, 51, 0.88);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+}
+
+.join-qr .qr {
+  width: clamp(88px, 9vw, 132px);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.join-qr span {
+  display: flex;
+  flex-direction: column;
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.join-qr small {
+  color: var(--muted);
+}
+
+.qr svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Online viewer (/live/) */
+.live-msg {
+  position: relative;
+  z-index: 2;
+  margin: auto;
+  max-width: 460px;
+  padding: 24px;
+  text-align: center;
+}
+
+.live-msg h1 {
+  font-family: var(--font-display);
+  font-size: clamp(28px, 6vw, 40px);
+  margin: 12px 0 8px;
+}
+
+.live-msg p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.live-status.live .live-dot {
+  background: var(--red);
+}
+
+.live-status.reconnecting .live-dot,
+.live-status.connecting .live-dot {
+  background: var(--amber);
+  animation: none;
+}
+
+.live-status.ended .live-dot,
+.live-status.notfound .live-dot {
+  background: var(--dim);
+  animation: none;
+}
+
 /* ==========================================================================
    Admin
    ========================================================================== */
@@ -1909,6 +1987,39 @@ input[type='range'] {
   border-radius: 8px;
   background: none;
   cursor: pointer;
+}
+
+.live-share {
+  display: grid;
+  grid-template-columns: 132px 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.live-share .qr {
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.live-link {
+  display: block;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+@media (max-width: 480px) {
+  .live-share {
+    grid-template-columns: 1fr;
+  }
+  .live-share .qr {
+    width: 160px;
+  }
 }
 
 .logo-preview {
