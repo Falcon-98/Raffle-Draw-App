@@ -43,9 +43,15 @@ export type Settings = {
   /** After the last of a prize is drawn, move on to the next prize that has some left. */
   autoAdvance: boolean;
   currentPrize: string;
-  /** Optional logo as a data URL (uploaded in the admin). */
+  /** Company name shown above the event title (defaults to BRAND.company). */
+  companyName: string;
+  /** Optional company logo as a data URL (uploaded in the admin). */
   logo?: string;
+  /** How the company is shown above the event title. */
+  companyDisplay: CompanyDisplay;
 };
+
+export type CompanyDisplay = 'name' | 'logo' | 'both';
 
 export type RaffleState = {
   participants: Participant[];
@@ -85,6 +91,8 @@ export const defaultState = (): RaffleState => ({
     prizeQty: {},
     autoAdvance: true,
     currentPrize: DEFAULT_PRIZES[0],
+    companyName: BRAND.company,
+    companyDisplay: 'name',
   },
   updatedAt: Date.now(),
 });

@@ -262,7 +262,7 @@ export default function DisplayPage() {
       {settings.showBubbles && names.length > 0 && <Bubbles names={names} visible={phase === 'idle'} />}
 
       <header className="topbar">
-        <BrandBlock eventTitle={settings.eventTitle} logo={settings.logo} />
+        <BrandBlock eventTitle={settings.eventTitle} company={settings.companyName} logo={settings.logo} display={settings.companyDisplay} />
         <div className="top-actions">
           <span className="pill hide-sm">
             <span className="live-dot" /> LIVE DRAW

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { BRAND, asset } from '@/lib/config';
+import type { CompanyDisplay } from '@/lib/store';
 
 /** The "Click" cursor mark — an arrow pointer with click ripples. */
 export function ClickMark({ className = 'brand-mark' }: { className?: string }) {
@@ -31,14 +32,28 @@ export function ClickMark({ className = 'brand-mark' }: { className?: string }) 
   );
 }
 
-export function BrandBlock({ eventTitle, logo }: { eventTitle?: string; logo?: string }) {
+export function BrandBlock({
+  eventTitle,
+  company,
+  logo,
+  display = 'name',
+}: {
+  eventTitle?: string;
+  company?: string;
+  logo?: string;
+  display?: CompanyDisplay;
+}) {
   // An uploaded logo (admin → Display settings) wins over the one configured in lib/config.ts.
   const src = logo || (BRAND.logo ? asset(BRAND.logo) : null);
+  const name = (company ?? BRAND.company).trim();
+  const showLogo = !!src && display !== 'name';
+  const showName = !!name && (display !== 'logo' || !src); // no logo yet → fall back to the name
   return (
     <div className="brand">
-      {src ? <img className="brand-logo" src={src} alt={BRAND.company} /> : <ClickMark />}
+      {/* The logo takes the place of the "Click" cursor mark. */}
+      {showLogo ? <img className="brand-logo" src={src!} alt={name || 'Company logo'} /> : <ClickMark />}
       <div className="brand-text">
-        <span className="brand-company">{BRAND.company}</span>
+        {showName && <span className="brand-company">{name}</span>}
         <span className="brand-event">{eventTitle || BRAND.event}</span>
       </div>
     </div>
