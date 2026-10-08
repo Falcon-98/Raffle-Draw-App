@@ -17,7 +17,7 @@ import {
   IconUpload,
   IconWarn,
 } from '@/components/Icons';
-import { BRAND, asset } from '@/lib/config';
+import { BRAND, NAME_COLOR_PRESETS, asset } from '@/lib/config';
 import { downloadWinners } from '@/lib/excel';
 import {
   type CompanyDisplay,
@@ -27,6 +27,7 @@ import {
   canDrawPrize,
   defaultState,
   eligible,
+  nameGradient,
   nextPrize,
   prizeLeft,
   prizeQty,
@@ -474,6 +475,50 @@ function SettingsCard({ state, update }: CardProps) {
               </button>
             ))}
           </div>
+        </div>
+      </div>
+      <div className="setting" style={{ display: 'block' }}>
+        <b>Winner name colours</b>
+        <span style={{ display: 'block', marginBottom: 10 }}>The big name on the winner card, left to right. Pick a preset or your own colours.</span>
+        <div className="name-preview-box" aria-hidden>
+          <div className="name-preview" style={{ '--name-grad': nameGradient(s.nameColors) } as React.CSSProperties}>
+            Winner Name
+          </div>
+        </div>
+        <div className="row" style={{ marginTop: 10 }}>
+          {NAME_COLOR_PRESETS.map((p) => {
+            const active = p.colors.join() === s.nameColors.join();
+            return (
+              <button
+                key={p.name}
+                className={`swatch${active ? ' active' : ''}`}
+                style={{ background: nameGradient(p.colors) }}
+                onClick={() => set('nameColors', p.colors)}
+                title={p.name}
+                aria-label={`${p.name} colours`}
+                aria-pressed={active}
+              >
+                <span>{p.name}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="row" style={{ marginTop: 10, alignItems: 'center' }}>
+          {[0, 1, 2].map((i) => (
+            <label key={i} className="color-pick" title={['Left', 'Middle', 'Right'][i]}>
+              <input
+                type="color"
+                value={s.nameColors[i] ?? s.nameColors[s.nameColors.length - 1]}
+                onChange={(e) => {
+                  const next = [0, 1, 2].map((j) => s.nameColors[j] ?? s.nameColors[s.nameColors.length - 1]);
+                  next[i] = e.target.value;
+                  set('nameColors', next);
+                }}
+                aria-label={`${['Left', 'Middle', 'Right'][i]} colour`}
+              />
+              {['Left', 'Middle', 'Right'][i]}
+            </label>
+          ))}
         </div>
       </div>
       <Setting title="Name bubbles" desc="Float every participant's name on the welcome screen" checked={s.showBubbles} onChange={(v) => set('showBubbles', v)} />

@@ -15,7 +15,7 @@ Everything runs in the browser. There is no server and no database, so nothing t
 - **Prize quantities** — e.g. *3rd Prize × 5*; the screen shows "3 of 5 left", a used-up prize can't be drawn again, and the next prize is selected automatically
 - **Not present → redraw** — mark a winner as absent; they stay in the record, can't win again, and the prize goes back up for a redraw
 - **Winners showcase** — a full-screen "Our winners" slide grouped by prize for the finale
-- Winners board, live entry counts, undo, one-prize-per-person
+- Winners board in draw order (1, 2, 3 …), each new winner added at the bottom and scrolled into view; live entry counts, undo, one-prize-per-person
 - Keyboard control on the display: <kbd>Space</kbd> draw · <kbd>Esc</kbd> back · <kbd>F</kbd> full screen · <kbd>W</kbd> winners · <kbd>M</kbd> sound · <kbd>?</kbd> help
 
 **Participants**
@@ -135,6 +135,7 @@ Click **Excel template** in the admin to download the ready-made file.
 | Company name and logo | Admin → *Display settings → Company*: type the name, upload a logo (PNG, JPG, SVG; resized automatically) and choose **Name**, **Logo** or **Logo + name**. The logo takes the place of the cursor icon at the top-left of the display; the name appears above the event title. Saved in the browser and in backups. For a permanent default, set `company` in `lib/config.ts`, or put a file in `public/brand/` and set `logo: '/brand/logo.png'`. |
 | Default company name, event name, tagline | `lib/config.ts` |
 | Default prize list | `lib/config.ts` → `DEFAULT_PRIZES` (names, quantities and order are editable live in the admin) |
+| Winner name colours | Admin → *Display settings → Winner name colours*: presets (Aurora, Gold, Sunset, Ocean, Emerald, White) or three custom colours, with a live preview. More presets: `NAME_COLOR_PRESETS` in `lib/config.ts` |
 | Colours, fonts, animation | `app/globals.css` (tokens at the top) |
 | Title, subtitle, bubbles, countdown, auto next prize, sound, spin time, winners board | Admin → *Display settings* (live) |
 

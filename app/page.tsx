@@ -26,6 +26,7 @@ import {
   canDrawPrize,
   eligible,
   loadState,
+  nameGradient,
   nextPrize,
   prizeLeft,
   prizeQty,
@@ -62,6 +63,7 @@ export default function DisplayPage() {
   const [toast, setToast] = useState('');
   const [soundOk, setSoundOk] = useState(true);
   const [help, setHelp] = useState(false);
+  const boardRef = useRef<HTMLOListElement>(null);
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
 
@@ -237,6 +239,22 @@ export default function DisplayPage() {
     else void document.documentElement.requestFullscreen?.().catch(() => {});
   };
 
+  // Keep the newest winner (bottom of the board) in view when the list is longer than the screen.
+  const boardCount = state ? activeWinners(state).length : 0;
+  useEffect(() => {
+    const ol = boardRef.current;
+    if (!ol) return;
+    const toBottom = () => ol.scrollTo({ top: ol.scrollHeight, behavior: 'smooth' });
+    // Again once the new row has animated in and the web fonts have settled the layout.
+    const raf = requestAnimationFrame(toBottom);
+    const t = setTimeout(toBottom, 500);
+    void document.fonts?.ready.then(toBottom);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(t);
+    };
+  }, [boardCount, phase]);
+
   /* ------------------------------------------------------------ render */
   if (!state || !settings) {
     return (
@@ -248,7 +266,10 @@ export default function DisplayPage() {
 
   const drawing = phase === 'countdown' || phase === 'spinning';
   // Keep the winner being drawn off the board until it is revealed.
-  const shownWinners = activeWinners(state).filter((w) => !(drawing && current && w.id === current.id));
+  // Draw order (1, 2, 3 …): each new winner joins at the bottom of the board.
+  const shownWinners = activeWinners(state)
+    .filter((w) => !(drawing && current && w.id === current.id))
+    .sort((a, b) => a.drawNo - b.drawNo);
   const showBoard = settings.showWinnersBoard && shownWinners.length > 0 && phase !== 'showcase';
   const total = state.participants.length;
   const prizeOk = canDrawPrize(state);
@@ -432,7 +453,7 @@ export default function DisplayPage() {
                   <IconGift /> {current.prize}
                 </span>
                 <div className="congrats">🎉 Congratulations!</div>
-                <WinnerName name={current.name} />
+                <WinnerName name={current.name} colors={settings.nameColors} />
                 {(current.ticket || current.group) && (
                   <div className="winner-meta">
                     {current.ticket && <span className="meta-chip">🎟️ {current.ticket}</span>}
@@ -455,9 +476,9 @@ export default function DisplayPage() {
             <h2>
               <IconTrophy /> Winners
             </h2>
-            <ol>
+            <ol ref={boardRef}>
               <AnimatePresence initial={false}>
-                {[...shownWinners].reverse().map((w) => (
+                {shownWinners.map((w) => (
                   <motion.li key={w.id} layout initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}>
                     <span className="no">{w.drawNo}</span>
                     <div style={{ minWidth: 0 }}>
@@ -528,14 +549,18 @@ export default function DisplayPage() {
 }
 
 /** Letters spring in one by one; words never break mid-word; long names shrink to fit. */
-function WinnerName({ name }: { name: string }) {
+function WinnerName({ name, colors }: { name: string; colors?: string[] }) {
   const chars = Array.from(name);
   const n = chars.length;
   // Aim for one line inside the card; very long names wrap between words.
   const vw = Math.min(8, 96 / Math.max(n, 1));
   let idx = 0;
   return (
-    <h2 className="winner-name" aria-label={name} style={{ fontSize: `clamp(34px, ${vw.toFixed(2)}vw, 104px)` }}>
+    <h2
+      className="winner-name"
+      aria-label={name}
+      style={{ fontSize: `clamp(34px, ${vw.toFixed(2)}vw, 104px)`, '--name-grad': nameGradient(colors) } as React.CSSProperties}
+    >
       {name.split(' ').map((word, wi, words) => (
         <span key={wi} className="word">
           {Array.from(word + (wi < words.length - 1 ? ' ' : '')).map((ch) => {
