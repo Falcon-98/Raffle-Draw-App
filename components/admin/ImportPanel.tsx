@@ -1,7 +1,8 @@
 'use client';
 
 import { DragEvent, FormEvent, useRef, useState } from 'react';
-import { IconClipboard, IconDownload, IconPencil, IconUpload } from '@/components/Icons';
+import { IconClipboard, IconDownload, IconPencil, IconSparkle, IconUpload } from '@/components/Icons';
+import { asset } from '@/lib/config';
 import { downloadTemplate, parseFile, parsePasted, type ImportRow } from '@/lib/excel';
 import { type Participant, type RaffleState, participantKey, uid } from '@/lib/store';
 
@@ -46,6 +47,24 @@ export default function ImportPanel({
     } finally {
       setBusy(false);
       if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  /** Fictional demo participants (public/sample-participants.csv), loaded through the normal import preview. */
+  const loadDemo = async () => {
+    setError('');
+    setBusy(true);
+    try {
+      const res = await fetch(asset(DEMO_CSV));
+      if (!res.ok) throw new Error();
+      const r = await parseFile(new File([await res.text()], 'sample-participants.csv'));
+      setRows(r);
+      setSource('the demo data');
+      setTab('upload');
+    } catch {
+      setError('Could not load the demo data. Check your connection and try again.');
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -125,9 +144,14 @@ export default function ImportPanel({
         <h2>
           <span className="num">1</span> Add participants
         </h2>
-        <button className="btn sm" onClick={() => void downloadTemplate()}>
-          <IconDownload /> Excel template
-        </button>
+        <div className="row">
+          <button className="btn sm" onClick={() => void loadDemo()} disabled={busy} title="Load 150 fictional participants to try the draw">
+            <IconSparkle /> Demo data
+          </button>
+          <button className="btn sm" onClick={() => void downloadTemplate()}>
+            <IconDownload /> Excel template
+          </button>
+        </div>
       </div>
 
       <div className="tabs" role="tablist">
@@ -160,6 +184,9 @@ export default function ImportPanel({
           </label>
           <p className="note" style={{ marginBottom: 0 }}>
             Not sure about the format? Download the <button className="btn sm" style={{ display: 'inline-flex', padding: '2px 8px', verticalAlign: 'middle' }} onClick={() => void downloadTemplate()}>Excel template</button>, fill it in and upload it here.
+          </p>
+          <p className="note" style={{ marginBottom: 0 }}>
+            Just trying it out? <button className="btn sm" style={{ display: 'inline-flex', padding: '2px 8px', verticalAlign: 'middle' }} onClick={() => void loadDemo()} disabled={busy}>Load demo data</button> adds 150 fictional participants, or <a href={asset(DEMO_CSV)} download="sample-participants.csv" style={{ color: 'var(--cyan)' }}>download the sample CSV</a> to test an upload.
           </p>
         </>
       )}
@@ -263,6 +290,8 @@ export default function ImportPanel({
     </div>
   );
 }
+
+const DEMO_CSV = '/sample-participants.csv';
 
 /** "C26-0009" → "C26-0010", keeping zero padding — speeds up manual entry. */
 function bump(t: string) {
