@@ -18,6 +18,8 @@ Everything runs in the browser. There is no server and no database, so nothing t
 
 Every push to `main` builds the site and publishes it with GitHub Actions (`.github/workflows/deploy.yml`). Progress is visible in the repository's **Actions** tab; a deploy takes about a minute.
 
+The same workflow is also the CI check: every pull request into `main` is type-checked and built (but not deployed), so a broken change shows a red ❌ on the pull request before it can reach the live site. It is the only workflow needed — do not add GitHub's sample *Next.js* Pages workflow on top of it: that sample rewrites `next.config.mjs`, fails, and would race this deploy.
+
 ### One-time setup (repository owner)
 
 1. **Settings → Pages → Build and deployment → Source: choose _GitHub Actions_.**
