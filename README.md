@@ -41,6 +41,13 @@ The workflow works out the URL prefix from the repository name, so a fork or ren
 | Page loads but has no styling / blank | Hard-refresh (Ctrl+Shift+R). If it persists, check the run used the right repository name. |
 | Admin PIN not accepted | The secret is applied at build time — re-run the workflow after setting `ADMIN_PIN`. |
 
+## Try it with demo data
+
+No list yet? Open the admin console, unlock it, and click **Demo data** in *Add participants*. It loads **150 fictional participants** (Sri Lankan names, tickets `DEMO-0001`… `DEMO-0150`, ten branches). You get the normal preview first, then choose **Add**. Then open the live display and draw.
+
+- The same list can be downloaded as a file to test the upload flow: [`public/sample-participants.csv`](public/sample-participants.csv), also served at `https://falcon-98.github.io/Raffle-Draw-App/sample-participants.csv`.
+- All names are made up. Before the real event, remove them with **Participants → Clear** (or **Backup & reset → Reset all**) and clear any demo winners.
+
 ## 2. Run it on your computer (optional)
 
 Needs Node.js 20.9 or newer (CI uses Node 22).
@@ -124,5 +131,7 @@ lib/
   excel.ts            Excel/CSV import, template + winners export
   sound.ts            Synthesised sound effects (no audio files)
   config.ts           Branding and defaults
+public/
+  sample-participants.csv   150 fictional participants (the "Demo data" button)
 .github/workflows/deploy.yml   Build & deploy to GitHub Pages
 ```
