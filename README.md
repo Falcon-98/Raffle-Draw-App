@@ -158,18 +158,37 @@ Let the audience follow the draw live on their own phones — at the venue or an
 ### How it works
 
 ```
- Event laptop                          Live server (JSON file)              Audience phones
+ Event laptop                          Live server                          Audience phones
  ┌────────────────┐   publishes each   ┌──────────────────────┐   pushes   ┌───────────────┐
- │ Admin + Display│ ── screen change ─▶│ server/live-server.mjs│ ─ live ──▶ │ /live/?r=CODE │
+ │ Admin + Display│ ── screen change ─▶│ Cloudflare or Node   │ ─ live ──▶ │ /live/?r=CODE │
  └────────────────┘   (secret key)     │ data/live.json        │ (SSE)      └───────────────┘
                                        └──────────────────────┘
 ```
 
-- `server/live-server.mjs` is a tiny Node.js server with **no database and no extra packages**. Live rooms are stored in a **JSON file** (`data/live.json`).
+- There are two interchangeable live servers with the same API — pick one:
+  - **Cloudflare (recommended for events):** `cloudflare/` — a Cloudflare Worker with one Durable Object per room, which keeps the room's JSON in its own storage. Always online, free plan, no laptop or tunnel needed. Deployed by a GitHub Action.
+  - **Node.js + JSON file:** `server/live-server.mjs` — a tiny server with **no database and no extra packages**; rooms are stored in a **JSON file** (`data/live.json`). Runs on the event laptop (plus a tunnel) or any Node host.
 - Each live view is a *room* with a random code (e.g. `RZDGUSHA`) and a secret key. The key stays in the event laptop's browser; the server keeps only a hash of it, so nobody else can publish to your room.
 - Viewers get updates instantly over a live stream (Server-Sent Events). On networks that block streams they automatically switch to checking every 3 seconds.
 
-### Set it up
+### Option A — Cloudflare (recommended)
+
+One-time setup, about 5 minutes:
+
+1. **Create an API token:** Cloudflare dashboard → *My Profile → API Tokens → Create Token* → template **Edit Cloudflare Workers** → *Continue → Create Token*. Copy it.
+2. **Find your Account ID:** Cloudflare dashboard → *Workers & Pages* → **Account ID** on the right.
+3. **Add them to GitHub:** repository *Settings → Secrets and variables → Actions → Secrets → New repository secret*:
+   - `CLOUDFLARE_API_TOKEN` = the token
+   - `CLOUDFLARE_ACCOUNT_ID` = the account ID
+   - optional `LIVE_CREATE_TOKEN` = a password needed to start a live view (recommended)
+4. **Deploy:** *Actions → Deploy live server to Cloudflare → Run workflow*. When it finishes, the run summary shows the address, e.g. `https://raffle-live.<your-subdomain>.workers.dev`. (It also redeploys by itself whenever `cloudflare/` changes on `main`.)
+5. *(Optional)* Add that address as the repository **variable** `LIVE_SERVER_URL` and re-run *Deploy to GitHub Pages*, so the admin is pre-filled.
+
+On the event day: Admin → **Online live view** → enter the address (if not pre-filled) → **Test connection** → **Go live**, then continue with step 4 below.
+
+Free plan limits are far above what a raffle needs (100,000 requests a day). Rooms untouched for 7 days are deleted automatically. To try it locally: `cd cloudflare && npm install && npm run dev` (serves on `http://localhost:8787`).
+
+### Option B — Node.js server with a JSON file
 
 1. **Start the live server** on the event laptop (or any computer/host that stays on):
    ```bash
@@ -188,7 +207,10 @@ Let the audience follow the draw live on their own phones — at the venue or an
 5. **Keep the live display open** — it is what sends the screen to the viewers.
 6. Afterwards press **Stop live view**: viewers see "The live draw has ended" and the link stops working.
 
-### Settings (`.env`)
+### Settings (`.env`, Node.js server)
+
+On Cloudflare the same options are `ALLOWED_ORIGINS` in `cloudflare/wrangler.toml` and the `LIVE_CREATE_TOKEN` GitHub secret.
+
 
 | Setting | What it does |
 |---|---|
@@ -230,6 +252,10 @@ lib/
   live.ts             Online live view: screen snapshot, publisher, server API
 server/
   live-server.mjs     Live server (Node, no dependencies; stores rooms in data/live.json)
+cloudflare/
+  src/worker.ts       Live server on Cloudflare (Worker + one Durable Object per room)
+  wrangler.toml       Cloudflare settings
+.github/workflows/deploy-live-server.yml   Deploys cloudflare/ (needs the Cloudflare secrets)
 public/
   sample-participants.csv   150 fictional participants (the "Demo data" button)
   sw.js                     Offline cache (service worker)

@@ -10,3 +10,5 @@ next-env.d.ts
 .env
 data/*.json
 data/*.tmp
+.wrangler/
+.dev.vars

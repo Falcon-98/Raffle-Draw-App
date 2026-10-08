@@ -1,0 +1,87 @@
+name: Deploy live server to Cloudflare
+
+# Deploys cloudflare/ (Worker + Durable Objects) — the online live view server.
+# Needs two repository secrets (Settings → Secrets and variables → Actions → Secrets):
+#   CLOUDFLARE_API_TOKEN   API token with the "Edit Cloudflare Workers" template
+#   CLOUDFLARE_ACCOUNT_ID  your account ID (Cloudflare dashboard → Workers & Pages, right-hand side)
+# Optional secret:
+#   LIVE_CREATE_TOKEN      password needed to start a live view (Admin → Online live view)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'cloudflare/**'
+      - '.github/workflows/deploy-live-server.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-server
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cloudflare
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      LIVE_CREATE_TOKEN: ${{ secrets.LIVE_CREATE_TOKEN }}
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check Cloudflare secrets
+        id: check
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::warning::Live server not deployed: add the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID repository secrets (see README §8), then run this workflow again."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v5
+        if: steps.check.outputs.ready == 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cloudflare/package-lock.json
+
+      - run: npm ci
+        if: steps.check.outputs.ready == 'true'
+
+      - name: Type check
+        if: steps.check.outputs.ready == 'true'
+        run: npm run typecheck
+
+      - name: Deploy to Cloudflare
+        id: deploy
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          npx wrangler deploy 2>&1 | tee deploy.log
+          url=$(grep -oE 'https://[a-zA-Z0-9.-]+\.workers\.dev' deploy.log | head -1)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Set the live view password
+        if: steps.check.outputs.ready == 'true' && env.LIVE_CREATE_TOKEN != ''
+        run: printf '%s' "$LIVE_CREATE_TOKEN" | npx wrangler secret put LIVE_CREATE_TOKEN
+
+      - name: Check it is up
+        if: steps.check.outputs.ready == 'true' && steps.deploy.outputs.url != ''
+        run: |
+          for i in 1 2 3 4 5 6; do
+            if curl -fsS "${{ steps.deploy.outputs.url }}/api/health"; then echo; break; fi
+            sleep 5
+          done
+          {
+            echo "### Live server deployed"
+            echo ""
+            echo "Address: **${{ steps.deploy.outputs.url }}**"
+            echo ""
+            echo "Paste it into Admin → Online live view, or set it as the repository variable \`LIVE_SERVER_URL\` so the admin is pre-filled."
+          } >> "$GITHUB_STEP_SUMMARY"

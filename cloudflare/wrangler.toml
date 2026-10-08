@@ -1,0 +1,22 @@
+# Raffle live server on Cloudflare (Workers + Durable Objects, free plan friendly).
+# Deploy: GitHub → Actions → "Deploy live server to Cloudflare" → Run workflow (see README §8),
+# or locally: cd cloudflare && npx wrangler deploy
+name = "raffle-live"
+main = "src/worker.ts"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+# Each live room is one Durable Object; its JSON state is kept in the object's own storage.
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Room"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"] # SQLite-backed Durable Objects are available on the free plan
+
+[vars]
+# Comma-separated sites allowed to use the API; empty = any site.
+ALLOWED_ORIGINS = ""
+# Password needed to create a room: set it as a secret instead of here:
+#   npx wrangler secret put LIVE_CREATE_TOKEN     (or the LIVE_CREATE_TOKEN GitHub secret)
