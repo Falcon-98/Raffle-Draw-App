@@ -86,7 +86,8 @@ function broadcast(code) {
   const room = db.rooms[code];
   const list = watchers.get(code);
   if (!room || !list) return;
-  const msg = { state: room.state, updatedAt: room.updatedAt, viewers: list.size };
+  // `now` lets viewers line their clocks up with the big screen (see app/live/page.tsx).
+  const msg = { state: room.state, updatedAt: room.updatedAt, viewers: list.size, now: Date.now() };
   for (const res of list) sendEvent(res, msg);
 }
 
@@ -236,7 +237,7 @@ const server = http.createServer(async (req, res) => {
 
       // Current screen (also used as a fallback when streaming is blocked)
       if (req.method === 'GET') {
-        return json(res, 200, { state: room.state, updatedAt: room.updatedAt, viewers: viewerCount(code) });
+        return json(res, 200, { state: room.state, updatedAt: room.updatedAt, viewers: viewerCount(code), now: Date.now() });
       }
 
       // Publish (event laptop only)

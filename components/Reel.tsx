@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { tick } from '@/lib/sound';
 
 const AFTER = 3; // filler rows below the winner so the window never looks empty
@@ -9,57 +9,79 @@ const AFTER = 3; // filler rows below the winner so the window never looks empty
 const ease = (t: number) => 1 - Math.pow(1 - t, 4.5);
 
 /**
+ * The exact sequence of names the reel spins through, ending on the winner. Built once by the
+ * display when a draw starts and also sent to the online live view, so every screen and every
+ * phone shows the very same names (and a viewer who refreshes sees them again, not new ones).
+ */
+export function buildReel(pool: string[], winnerName: string, durationMs: number) {
+  const count = Math.max(36, Math.round(durationMs / 85));
+  const filler = () => (pool.length ? pool[Math.floor(Math.random() * pool.length)] : winnerName);
+  const items: string[] = [];
+  for (let i = 0; i < count; i++) {
+    let n = filler();
+    // Avoid showing the winner right before it lands (feels less suspicious).
+    if (i > count - 6 && n === winnerName && pool.length > 1) n = filler();
+    items.push(n);
+  }
+  items.push(winnerName);
+  for (let i = 0; i < AFTER; i++) items.push(filler());
+  return { items, winIndex: count };
+}
+
+/**
  * A slot-machine style reel. The winner is decided BEFORE this component
  * mounts (and already saved); the reel only animates towards it.
+ * `startedAtMs` (epoch ms) makes it run in step with another screen — a live viewer joining
+ * mid-spin, or re-syncing when the big screen's start time arrives; `onStart` reports when
+ * it actually started (the display sends that to live viewers).
  */
 export default function Reel({
-  pool,
-  winnerName,
+  items,
+  winIndex,
   durationMs,
   sound,
   onDone,
+  startedAtMs,
+  onStart,
 }: {
-  pool: string[];
-  winnerName: string;
+  items: string[];
+  winIndex: number;
   durationMs: number;
   sound: boolean;
   onDone: () => void;
+  startedAtMs?: number | null;
+  onStart?: (atMs: number) => void;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const reelRef = useRef<HTMLDivElement>(null);
   const [done, setDone] = useState(false);
   const doneRef = useRef(onDone);
   doneRef.current = onDone;
-
-  const items = useMemo(() => {
-    const count = Math.max(36, Math.round(durationMs / 85));
-    const filler = () => (pool.length ? pool[Math.floor(Math.random() * pool.length)] : winnerName);
-    const list: string[] = [];
-    for (let i = 0; i < count; i++) {
-      let n = filler();
-      // Avoid showing the winner right before it lands (feels less suspicious).
-      if (i > count - 6 && n === winnerName && pool.length > 1) n = filler();
-      list.push(n);
-    }
-    list.push(winnerName);
-    for (let i = 0; i < AFTER; i++) list.push(filler());
-    return list;
-  }, [pool, winnerName, durationMs]);
-
-  const winIndex = items.length - 1 - AFTER;
+  // performance.now() at which the spin began. Fixed when the reel appears (a re-render, e.g. sound
+  // switched on, never restarts it) and only moved to follow a known start time from another screen.
+  const startedAt = useRef<number | null>(null);
+  const startRef = useRef(onStart);
+  startRef.current = onStart;
+  const elapsedFrom = (epoch: number | null | undefined) => (epoch ? Math.max(0, Date.now() - epoch) : 0);
+  const finished = useRef(false);
+  const winnerName = items[winIndex];
 
   useEffect(() => {
     const track = trackRef.current;
     const reel = reelRef.current;
     if (!track || !reel) return;
-    const startAt = performance.now();
+    if (startedAt.current === null) {
+      const skip = elapsedFrom(startedAtMs);
+      startedAt.current = performance.now() - skip;
+      startRef.current?.(Date.now() - skip);
+    }
     let raf = 0;
     let lastIdx = -1;
     let lastTick = 0;
     let lastRow = 0;
 
     const frame = (now: number) => {
-      const t = Math.min(1, (now - startAt) / durationMs);
+      const t = Math.min(1, (now - (startedAt.current ?? now)) / durationMs);
       const row = t < 1 ? ease(t) * winIndex : winIndex; // position in rows; ends exactly on the winner
       // Move the strip by a percentage of its own height (all rows are the same height), so
       // nothing is measured in pixels: the reel's zoom-in transition, fractional row sizes
@@ -81,13 +103,24 @@ export default function Reel({
       if (t < 1) raf = requestAnimationFrame(frame);
       else {
         track.style.filter = 'none';
+        if (finished.current) return;
+        finished.current = true;
         setDone(true);
         setTimeout(() => doneRef.current(), 650);
       }
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, winIndex, durationMs, sound]);
+
+  // A better start time arrived (live viewer): move the running reel to match it.
+  useEffect(() => {
+    if (startedAt.current === null || !startedAtMs || finished.current) return;
+    const target = performance.now() - elapsedFrom(startedAtMs);
+    if (Math.abs(target - startedAt.current) > 120) startedAt.current = target;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startedAtMs]);
 
   return (
     <div ref={reelRef} className={`reel${done ? ' done' : ''}`} role="status" aria-live="polite">

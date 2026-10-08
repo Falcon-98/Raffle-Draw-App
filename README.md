@@ -155,6 +155,8 @@ Click **Excel template** in the admin to download the ready-made file.
 
 Let the audience follow the draw live on their own phones — at the venue or anywhere in the world. They see the welcome screen, the 3-2-1 countdown, the reel landing on the winner, the winner card with confetti, the winners list and the "Our winners" finale, all in real time. They can only watch; the draw itself still happens on the event laptop.
 
+Every phone shows **exactly what the big screen shows, in step with it**: the same names spin through the reel in the same order, and the reel lands at the same moment. Nothing on a phone reveals the winner before its reel has landed. Someone who opens the link or refreshes in the middle of a draw joins at the same point — mid-countdown or mid-spin — instead of starting over, and after the reveal they see the winner card straight away.
+
 ### How it works
 
 ```

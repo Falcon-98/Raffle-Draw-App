@@ -31,9 +31,22 @@ export type LiveDraw = {
   pool: number;
   fingerprint: string;
   at: string;
-  reel: string[]; // names the reel spins through (the winner is added by the reel itself)
+  reel: string[]; // the exact names the reel spins through, ending on the winner (same on every screen)
+  winIndex: number; // position of the winner in `reel`
   countdown: boolean;
   spinMs: number;
+  countdownAt?: number; // when the 3-2-1 started / the reel started spinning — big-screen clock (ms);
+  spinAt?: number; //      viewers convert them with `sentAt` + the server time to join in sync
+};
+
+/** What the display is showing for the current draw (see app/page.tsx). */
+export type DrawShow = {
+  items: string[];
+  winIndex: number;
+  spinMs: number;
+  countdown: boolean;
+  countdownAt?: number;
+  spinAt?: number;
 };
 
 export type LiveWinner = { id: string; drawNo: number; name: string; ticket?: string; group?: string; prize: string };
@@ -49,6 +62,7 @@ export type LiveSnapshot = {
   winners: LiveWinner[];
   names: string[]; // a sample of names for the floating bubbles
   view: { phase: DisplayPhase; draw: LiveDraw | null };
+  sentAt?: number; // big-screen clock when this update was sent (added when publishing)
 };
 
 export type LiveState = LiveSnapshot | { v: 1; live: false } | null;
@@ -57,7 +71,6 @@ export type LiveRoom = { code: string; key: string };
 
 /* ------------------------------------------------------------ snapshot */
 
-const MAX_REEL = 120;
 const MAX_BUBBLES = 60;
 
 /** Every n-th name, so the sample is spread over the list and stable between publishes. */
@@ -68,15 +81,20 @@ function spread(names: string[], max: number) {
 }
 
 export function buildSnapshot(
-  s: RaffleState,
-  view: { phase: DisplayPhase; current: Winner | null; reelPool: string[]; fingerprint: string },
+  state: RaffleState,
+  view: { phase: DisplayPhase; current: Winner | null; show: DrawShow | null; fingerprint: string },
 ): LiveSnapshot {
+  const c = view.current;
+  const hidden = !!c && (view.phase === 'countdown' || view.phase === 'spinning');
+  // Until the reel lands, everything viewers see is as if this draw hadn't happened yet
+  // (winners list, counts, prizes left), so nothing gives the winner away early.
+  const s = hidden ? { ...state, winners: state.winners.filter((w) => w.id !== c!.id) } : state;
   const pool = eligible(s);
   const won = activeWinners(s).sort((a, b) => a.drawNo - b.drawNo);
   const st = s.settings;
   const listed = st.prizes.includes(st.currentPrize);
-  const c = view.current;
-  const drawing = view.phase === 'countdown' || view.phase === 'spinning' || view.phase === 'winner';
+  const sh = view.show;
+  const drawing = !!sh && (view.phase === 'countdown' || view.phase === 'spinning' || view.phase === 'winner');
   return {
     v: 1,
     live: true,
@@ -97,10 +115,7 @@ export function buildSnapshot(
     prizes: st.prizes,
     counts: { entries: s.participants.length, eligible: pool.length, winners: won.length },
     fingerprint: view.fingerprint,
-    // While the reel spins, keep the winner off the public board too.
-    winners: won
-      .filter((w) => !(c && w.id === c.id && (view.phase === 'countdown' || view.phase === 'spinning')))
-      .map(({ id, drawNo, name, ticket, group, prize }) => ({ id, drawNo, name, ticket, group, prize })),
+    winners: won.map(({ id, drawNo, name, ticket, group, prize }) => ({ id, drawNo, name, ticket, group, prize })),
     names: spread(
       pool.map((p) => p.name),
       MAX_BUBBLES,
@@ -108,7 +123,7 @@ export function buildSnapshot(
     view: {
       phase: view.phase,
       draw:
-        c && drawing
+        c && sh && drawing
           ? {
               id: c.id,
               name: c.name,
@@ -119,9 +134,12 @@ export function buildSnapshot(
               pool: c.pool,
               fingerprint: c.fingerprint,
               at: c.at,
-              reel: spread(view.reelPool, MAX_REEL),
-              countdown: st.countdown,
-              spinMs: st.spinSeconds * 1000,
+              reel: sh.items,
+              winIndex: sh.winIndex,
+              countdown: sh.countdown,
+              spinMs: sh.spinMs,
+              countdownAt: sh.countdownAt,
+              spinAt: sh.spinAt,
             }
           : null,
     },
@@ -141,7 +159,8 @@ export function normalizeServer(input: string) {
 async function call<T>(url: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(url, { ...init, cache: 'no-store' });
+    // Never wait forever: a stuck request would hold up every later update from the big screen.
+    res = await fetch(url, { ...init, cache: 'no-store', signal: AbortSignal.timeout(10000) });
   } catch {
     throw new Error('Cannot reach the live server. Check the address and that the server is running.');
   }
@@ -163,7 +182,7 @@ export const livePublish = (server: string, room: LiveRoom, state: LiveState) =>
   });
 
 export const liveGet = (server: string, code: string) =>
-  call<{ state: LiveState; updatedAt: number; viewers: number }>(`${server}/api/rooms/${code}`);
+  call<{ state: LiveState; updatedAt: number; viewers: number; now?: number }>(`${server}/api/rooms/${code}`);
 
 export const liveClose = (server: string, room: LiveRoom) =>
   call<{ ok: boolean }>(`${server}/api/rooms/${room.code}`, { method: 'DELETE', headers: { Authorization: `Bearer ${room.key}` } });
@@ -185,7 +204,7 @@ export function viewerUrl(server: string, code: string) {
  */
 export function useLivePublisher(
   state: RaffleState | null,
-  view: { phase: DisplayPhase; current: Winner | null; reelPool: string[]; fingerprint: string },
+  view: { phase: DisplayPhase; current: Winner | null; show: DrawShow | null; fingerprint: string },
 ) {
   const live = state?.settings.live;
   const server = live?.server ? normalizeServer(live.server) : '';
@@ -207,7 +226,8 @@ export function useLivePublisher(
     pending.current = null;
     inflight.current = true;
     try {
-      await livePublish(job.server, job.room, job.snap);
+      // sentAt lets viewers line their clock up with the big screen (not part of the change check).
+      await livePublish(job.server, job.room, { ...job.snap, sentAt: Date.now() });
       lastSent.current = job.sig;
       failures.current = 0;
       setStatus({ ok: true, at: Date.now() });

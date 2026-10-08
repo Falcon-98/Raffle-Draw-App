@@ -10,7 +10,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Background, BrandBlock } from '@/components/Brand';
 import Bubbles from '@/components/Bubbles';
 import Reel from '@/components/Reel';
-import { Countdown, WinnerName, celebrate, groupByPrize } from '@/components/Stage';
+import { COUNTDOWN_MS, Countdown, WinnerName, celebrate, groupByPrize } from '@/components/Stage';
 import { IconFinger, IconGift, IconShield, IconTrophy, Trophy } from '@/components/Icons';
 import { type LiveDraw, type LiveSnapshot, type LiveState, liveGet, normalizeServer } from '@/lib/live';
 import { fanfare, unlockAudio, whoosh } from '@/lib/sound';
@@ -18,6 +18,8 @@ import { DEFAULT_LIVE_SERVER } from '@/lib/config';
 
 type Conn = 'connecting' | 'live' | 'reconnecting' | 'ended' | 'notfound' | 'nolink' | 'waiting';
 type Phase = 'idle' | 'countdown' | 'spinning' | 'winner' | 'showcase';
+/** Server timing that comes with every message (lets a phone line its clock up with the big screen). */
+type Timing = { updatedAt?: number; now?: number };
 
 export default function LivePage() {
   const [conn, setConn] = useState<Conn>('connecting');
@@ -25,6 +27,10 @@ export default function LivePage() {
   const [viewers, setViewers] = useState(0);
   const [phase, setPhase] = useState<Phase>('idle');
   const [draw, setDraw] = useState<LiveDraw | null>(null);
+  // When the current countdown / reel started on the big screen, in this phone's clock (null = unknown yet).
+  const [startAt, setStartAt] = useState<number | null>(null);
+  const phaseRef = useRef<Phase>('idle');
+  phaseRef.current = phase;
   const [sound, setSound] = useState(false);
   const soundRef = useRef(sound);
   soundRef.current = sound;
@@ -34,6 +40,8 @@ export default function LivePage() {
   const animating = useRef(false);
   const first = useRef(true);
   const syncTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Big-screen clock → this phone's clock (null until a message with timing arrives).
+  const toLocal = useRef<((t: number) => number) | null>(null);
 
   /** Bring the local screen in line with the big screen (outside of a running animation). */
   const follow = useCallback((s: LiveSnapshot) => {
@@ -41,18 +49,40 @@ export default function LivePage() {
     const isFirst = first.current;
     first.current = false;
 
-    // A new draw is starting: play the full show here too.
+    // A draw is under way that this phone hasn't shown yet: join it at the same point as the big
+    // screen (same names, same timing) — also after a refresh — instead of starting over.
+    const conv = toLocal.current;
     if (d && d.id !== shownDraw.current && (p === 'countdown' || p === 'spinning')) {
       clearTimeout(syncTimer.current);
       shownDraw.current = d.id;
-      animating.current = true;
       setDraw(d);
-      if (d.countdown && p === 'countdown') setPhase('countdown');
-      else {
-        setPhase('spinning');
-        if (soundRef.current) whoosh();
+      const now = Date.now();
+      let mode: 'countdown' | 'spinning' = d.countdown && p === 'countdown' ? 'countdown' : 'spinning';
+      let at: number | null = null;
+      if (conv && p === 'spinning' && d.spinAt) at = conv(d.spinAt);
+      else if (conv && mode === 'countdown' && d.countdownAt) {
+        at = conv(d.countdownAt);
+        if (now - at >= COUNTDOWN_MS) {
+          mode = 'spinning';
+          at += COUNTDOWN_MS; // close enough; corrected as soon as the reel's own start time arrives
+        }
       }
+      if (mode === 'spinning' && at !== null && now - at >= d.spinMs) {
+        // The reel has already landed on the big screen: just show the result.
+        animating.current = false;
+        setPhase('winner');
+        if (!isFirst) celebrate();
+        return;
+      }
+      animating.current = true;
+      setStartAt(at);
+      setPhase(mode);
+      if (mode === 'spinning' && soundRef.current && (at === null || now - at < 500)) whoosh();
       return;
+    }
+    // Same draw, still running here: line the reel up with the big screen's start time once known.
+    if (animating.current && d && d.id === shownDraw.current && conv && phaseRef.current === 'spinning' && d.spinAt) {
+      setStartAt(conv(d.spinAt));
     }
     if (animating.current) return; // let the reel finish; it re-syncs when done
 
@@ -72,8 +102,14 @@ export default function LivePage() {
   }, []);
 
   const receive = useCallback(
-    (state: LiveState, count?: number) => {
+    (state: LiveState, count?: number, timing?: Timing) => {
       if (typeof count === 'number') setViewers(count);
+      // updatedAt (server) − sentAt (big screen) = big screen → server; now (server) vs. our clock = server → us.
+      if (state && state.live && state.sentAt && timing?.updatedAt && timing.now) {
+        const screenToServer = timing.updatedAt - state.sentAt;
+        const serverToLocal = Date.now() - timing.now;
+        toLocal.current = (t) => t + screenToServer + serverToLocal;
+      }
       if (!state) {
         setConn('waiting');
         return;
@@ -109,7 +145,7 @@ export default function LivePage() {
     const pollOnce = async () => {
       try {
         const r = await liveGet(server, code);
-        receive(r.state, r.viewers);
+        receive(r.state, r.viewers, r);
       } catch (e) {
         if (e instanceof Error && /No live draw/.test(e.message)) {
           setConn((c) => (c === 'ended' || c === 'live' || c === 'reconnecting' ? 'ended' : 'notfound'));
@@ -138,8 +174,8 @@ export default function LivePage() {
       };
       es.onmessage = (ev) => {
         try {
-          const m = JSON.parse(ev.data) as { state: LiveState; viewers: number };
-          receive(m.state, m.viewers);
+          const m = JSON.parse(ev.data) as { state: LiveState; viewers: number } & Timing;
+          receive(m.state, m.viewers, m);
         } catch {
           /* ignore */
         }
@@ -167,6 +203,10 @@ export default function LivePage() {
 
   /* --------------------------------------------------------- the show */
   const onCountdownDone = useCallback(() => {
+    // Spin in step with the big screen if its reel start is already known, else start now (re-synced later).
+    const d = latest.current?.view.draw;
+    const conv = toLocal.current;
+    setStartAt(d && d.id === shownDraw.current && d.spinAt && conv ? conv(d.spinAt) : null);
     setPhase('spinning');
     if (soundRef.current) whoosh();
   }, []);
@@ -203,7 +243,11 @@ export default function LivePage() {
   }
 
   const b = snap.brand;
-  const showBoard = snap.winners.length > 0 && phase !== 'showcase';
+  // While this phone is still counting down / spinning, its winner stays a secret here too —
+  // even if the big screen (a moment ahead) has already revealed it.
+  const hiddenId = (phase === 'countdown' || phase === 'spinning') && draw ? draw.id : null;
+  const boardWinners = hiddenId ? snap.winners.filter((w) => w.id !== hiddenId) : snap.winners;
+  const showBoard = boardWinners.length > 0 && phase !== 'showcase';
   const statusLabel = conn === 'live' ? 'LIVE' : conn === 'ended' || conn === 'notfound' ? 'ENDED' : 'RECONNECTING…';
 
   return (
@@ -265,7 +309,7 @@ export default function LivePage() {
                 <span className="prize-pill">
                   <IconGift /> {draw.prize}
                 </span>
-                <Countdown sound={sound} onDone={onCountdownDone} />
+                <Countdown sound={sound} onDone={onCountdownDone} startedAtMs={startAt} />
                 <span className="picking">Get ready…</span>
               </motion.div>
             )}
@@ -275,7 +319,14 @@ export default function LivePage() {
                 <span className="prize-pill">
                   <IconGift /> {draw.prize}
                 </span>
-                <Reel pool={draw.reel} winnerName={draw.name} durationMs={draw.spinMs} sound={sound} onDone={onReelDone} />
+                <Reel
+                  items={draw.reel}
+                  winIndex={draw.winIndex}
+                  durationMs={draw.spinMs}
+                  startedAtMs={startAt}
+                  sound={sound}
+                  onDone={onReelDone}
+                />
                 <span className="picking">
                   Picking <b>1</b> lucky winner from <b>{draw.pool.toLocaleString()}</b> participants…
                 </span>
@@ -344,7 +395,7 @@ export default function LivePage() {
               <IconTrophy /> Winners
             </h2>
             <ol>
-              {snap.winners.map((w) => (
+              {boardWinners.map((w) => (
                 <li key={w.id}>
                   <span className="no">{w.drawNo}</span>
                   <div style={{ minWidth: 0 }}>

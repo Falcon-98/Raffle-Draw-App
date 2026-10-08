@@ -287,7 +287,7 @@ function LiveCard({ state, update, online }: CardProps & { online: boolean }) {
       // Show something straight away if the display window isn't open yet (it takes over once open).
       if (!online) {
         const fingerprint = await poolFingerprint(eligible(state));
-        await livePublish(server, r, buildSnapshot(state, { phase: 'idle', current: null, reelPool: [], fingerprint }));
+        await livePublish(server, r, buildSnapshot(state, { phase: 'idle', current: null, show: null, fingerprint }));
       }
     } catch (e) {
       setMsg({ ok: false, text: e instanceof Error ? e.message : String(e) });
