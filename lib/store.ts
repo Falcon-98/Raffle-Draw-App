@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BRAND, DEFAULT_PRIZES } from './config';
+import { BRAND, DEFAULT_PRIZES, NAME_COLOR_PRESETS } from './config';
 
 /* ------------------------------------------------------------------ types */
 
@@ -49,6 +49,8 @@ export type Settings = {
   logo?: string;
   /** How the company is shown above the event title. */
   companyDisplay: CompanyDisplay;
+  /** Winner name colours, left → right (3 gradient stops). */
+  nameColors: string[];
 };
 
 export type CompanyDisplay = 'name' | 'logo' | 'both';
@@ -93,6 +95,7 @@ export const defaultState = (): RaffleState => ({
     currentPrize: DEFAULT_PRIZES[0],
     companyName: BRAND.company,
     companyDisplay: 'name',
+    nameColors: NAME_COLOR_PRESETS[0].colors,
   },
   updatedAt: Date.now(),
 });
@@ -218,3 +221,9 @@ const norm = (v: string) => v.trim().replace(/\s+/g, ' ').toLowerCase();
 export const participantKey = (p: Pick<Participant, 'name' | 'ticket'>) =>
   p.ticket ? `t:${norm(p.ticket)}` : `n:${norm(p.name)}`;
 export const normalize = norm;
+
+/** CSS gradient for the winner's name. */
+export const nameGradient = (colors: string[] | undefined) => {
+  const c = colors?.length ? colors : NAME_COLOR_PRESETS[0].colors;
+  return `linear-gradient(100deg, ${(c.length > 1 ? c : [c[0], c[0]]).join(', ')})`;
+};

@@ -768,7 +768,7 @@ kbd {
 .winner-name .ch {
   display: inline-block;
   white-space: pre;
-  background-image: var(--grad);
+  background-image: var(--name-grad, var(--grad)); /* admin → Display settings → Winner name colours */
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -1847,6 +1847,68 @@ input[type='range'] {
 
 .chip.done:not(.active) {
   opacity: 0.55;
+}
+
+.name-preview-box {
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--line);
+  text-align: center;
+}
+
+.name-preview {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 34px;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  background-image: var(--name-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.swatch {
+  position: relative;
+  width: 64px;
+  height: 36px;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+.swatch span {
+  position: absolute;
+  inset: auto 0 -18px;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.swatch.active {
+  border-color: #fff;
+}
+
+.color-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 14px;
+}
+
+.color-pick input {
+  width: 36px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
 }
 
 .logo-preview {
