@@ -20,6 +20,7 @@ import {
 import { BRAND, asset } from '@/lib/config';
 import { downloadWinners } from '@/lib/excel';
 import {
+  type CompanyDisplay,
   type DisplayPhase,
   type RaffleState,
   activeWinners,
@@ -74,7 +75,8 @@ function Admin() {
           <div>
             <h1>Admin console</h1>
             <small>
-              {BRAND.company} · {state.settings.eventTitle}
+              {state.settings.companyName ? `${state.settings.companyName} · ` : ''}
+              {state.settings.eventTitle}
             </small>
           </div>
         </div>
@@ -405,7 +407,12 @@ function SettingsCard({ state, update }: CardProps) {
   const uploadLogo = async (f?: File) => {
     if (!f) return;
     try {
-      set('logo', await logoToDataUrl(f));
+      const logo = await logoToDataUrl(f);
+      // First logo: show it next to the name straight away.
+      update((st) => ({
+        ...st,
+        settings: { ...st.settings, logo, companyDisplay: st.settings.companyDisplay === 'name' ? 'both' : st.settings.companyDisplay },
+      }));
     } catch {
       alert('That image could not be read. Use a PNG, JPG or SVG file.');
     } finally {
@@ -428,22 +435,45 @@ function SettingsCard({ state, update }: CardProps) {
           <input className="input" value={s.eventSubtitle} onChange={(e) => set('eventSubtitle', e.target.value)} />
         </label>
       </div>
-      <div className="setting">
-        <div>
-          <b>Logo</b>
-          <span>Shown top-left on the display (PNG, JPG or SVG)</span>
-        </div>
-        <div className="row" style={{ flexWrap: 'nowrap' }}>
-          {s.logo && <img src={s.logo} alt="Current logo" className="logo-preview" />}
-          <button className="btn sm" onClick={() => logoRef.current?.click()}>
-            <IconUpload /> {s.logo ? 'Change' : 'Upload'}
-          </button>
-          {s.logo && (
-            <button className="btn sm" onClick={() => set('logo', undefined)} aria-label="Remove logo">
-              ×
+      <div className="setting" style={{ display: 'block' }}>
+        <b>Company</b>
+        <span style={{ display: 'block', marginBottom: 10 }}>Top-left of the display: the logo replaces the cursor icon, the name sits above the event title</span>
+        <div className="col" style={{ gap: 10 }}>
+          <label className="field">
+            Company name
+            <input className="input" value={s.companyName} placeholder="e.g. Guardian" onChange={(e) => set('companyName', e.target.value)} />
+          </label>
+          <div className="row" style={{ alignItems: 'center' }}>
+            {s.logo && <img src={s.logo} alt="Current company logo" className="logo-preview" />}
+            <button className="btn sm" onClick={() => logoRef.current?.click()}>
+              <IconUpload /> {s.logo ? 'Change logo' : 'Upload logo'}
             </button>
-          )}
-          <input ref={logoRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden onChange={(e) => void uploadLogo(e.target.files?.[0])} />
+            {s.logo && (
+              <button className="btn sm" onClick={() => update((st) => ({ ...st, settings: { ...st.settings, logo: undefined, companyDisplay: 'name' } }))}>
+                Remove logo
+              </button>
+            )}
+            <input ref={logoRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden onChange={(e) => void uploadLogo(e.target.files?.[0])} />
+          </div>
+          <div className="seg" role="group" aria-label="Show company as">
+            {(
+              [
+                ['name', 'Name'],
+                ['logo', 'Logo'],
+                ['both', 'Logo + name'],
+              ] as [CompanyDisplay, string][]
+            ).map(([k, label]) => (
+              <button
+                key={k}
+                className={s.companyDisplay === k ? 'active' : ''}
+                disabled={k !== 'name' && !s.logo && !BRAND.logo}
+                title={k !== 'name' && !s.logo && !BRAND.logo ? 'Upload a logo first' : undefined}
+                onClick={() => set('companyDisplay', k)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
       <Setting title="Name bubbles" desc="Float every participant's name on the welcome screen" checked={s.showBubbles} onChange={(v) => set('showBubbles', v)} />

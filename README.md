@@ -28,7 +28,7 @@ Everything runs in the browser. There is no server and no database, so nothing t
 
 **Event-proof**
 - Works **offline** after the first visit (service worker) and can be installed as an app
-- Upload your **logo** from the admin; title, subtitle, sound, spin time and more change live
+- **Company branding** from the admin: company name, uploaded logo (it replaces the cursor icon top-left), shown as *Name*, *Logo* or *Logo + name*; title, subtitle, sound, spin time and more change live
 - Admin and display stay in sync in the same browser; opening the display twice can't cause a double draw
 
 ---
@@ -132,8 +132,8 @@ Click **Excel template** in the admin to download the ready-made file.
 
 | What | Where |
 |---|---|
-| Logo | Admin → *Display settings → Logo* (live, stored in the browser and in backups), or for a permanent default put a file in `public/brand/` and set `logo: '/brand/logo.png'` in `lib/config.ts` |
-| Company name, event name, tagline | `lib/config.ts` |
+| Company name and logo | Admin → *Display settings → Company*: type the name, upload a logo (PNG, JPG, SVG; resized automatically) and choose **Name**, **Logo** or **Logo + name**. The logo takes the place of the cursor icon at the top-left of the display; the name appears above the event title. Saved in the browser and in backups. For a permanent default, set `company` in `lib/config.ts`, or put a file in `public/brand/` and set `logo: '/brand/logo.png'`. |
+| Default company name, event name, tagline | `lib/config.ts` |
 | Default prize list | `lib/config.ts` → `DEFAULT_PRIZES` (names, quantities and order are editable live in the admin) |
 | Colours, fonts, animation | `app/globals.css` (tokens at the top) |
 | Title, subtitle, bubbles, countdown, auto next prize, sound, spin time, winners board | Admin → *Display settings* (live) |

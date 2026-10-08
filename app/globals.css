@@ -198,9 +198,21 @@ a {
   filter: drop-shadow(0 6px 18px rgba(139, 92, 246, 0.55));
 }
 
+/* Uploaded company logo, in place of the cursor mark */
 .brand-logo {
-  height: 44px;
+  display: block;
+  flex: none;
+  height: 48px;
   width: auto;
+  max-width: 180px;
+  object-fit: contain;
+}
+
+@media (max-width: 640px) {
+  .brand-logo {
+    height: 36px;
+    max-width: 104px;
+  }
 }
 
 .brand-text {
@@ -694,6 +706,9 @@ kbd {
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   animation: spin-border 4s linear infinite;
+  /* Decorative border only: without this the (masked, invisible) layer covers the
+     whole card and swallows clicks on the Continue button. */
+  pointer-events: none;
 }
 
 @property --angle {
@@ -713,6 +728,7 @@ kbd {
   background: repeating-conic-gradient(from 0deg, rgba(255, 197, 66, 0.12) 0 8deg, transparent 8deg 22deg);
   animation: rays 30s linear infinite;
   mask-image: radial-gradient(circle, #000 10%, transparent 55%);
+  pointer-events: none;
 }
 
 @keyframes rays {
@@ -784,6 +800,8 @@ kbd {
 }
 
 .next-btn {
+  position: relative;
+  z-index: 1;
   margin-top: 20px;
   padding: 12px 26px;
   border-radius: 999px;
@@ -1684,6 +1702,11 @@ input[type='range'] {
 .seg button.active {
   background: var(--panel-strong);
   color: var(--text);
+}
+
+.seg button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .toolbar {
