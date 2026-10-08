@@ -5,3 +5,8 @@ out/
 next-env.d.ts
 .DS_Store
 .env*.local
+
+# Local settings and live-server data
+.env
+data/*.json
+data/*.tmp

@@ -5,7 +5,7 @@ A colourful, animated raffle for the **Click 2026** customer event, built with *
 - **Live display** (`/`) — the screen the audience sees: floating name bubbles, a slot-machine reel, a winner reveal with confetti and fanfare, a winners board and an on-screen fairness strip.
 - **Admin console** (`/admin/`) — PIN-protected control room: add names (Excel upload, copy-paste or typing), exclude people, set prizes, run draws, undo, export winners to Excel, back up and restore.
 
-Everything runs in the browser. There is no server and no database, so nothing to pay for or maintain.
+Everything runs in the browser. There is no server and no database, so nothing to pay for or maintain. The only optional extra is the small **live server** that lets the audience watch on their own phones (section 8).
 
 ### Features
 
@@ -27,6 +27,7 @@ Everything runs in the browser. There is no server and no database, so nothing t
 - PIN-protected admin, JSON backup & restore
 
 **Event-proof**
+- **Online live view** — the audience watches the draw in real time on their own phones (link + QR code); countdown, reel, winner and winners list follow the big screen
 - Works **offline** after the first visit (service worker) and can be installed as an app
 - **Company branding** from the admin: company name, uploaded logo (it replaces the cursor icon top-left), shown as *Name*, *Logo* or *Logo + name*; title, subtitle, sound, spin time and more change live
 - Admin and display stay in sync in the same browser; opening the display twice can't cause a double draw
@@ -74,7 +75,7 @@ No list yet? Open the admin console, unlock it, and click **Demo data** in *Add 
 
 ## 2. Run it on your computer (optional)
 
-Needs Node.js 20.9 or newer (CI uses Node 22).
+Needs Node.js 22.9 or newer (CI uses Node 22).
 
 ```bash
 npm install
@@ -82,7 +83,11 @@ npm run dev        # http://localhost:3000 and http://localhost:3000/admin/
 npm run typecheck  # TypeScript check
 npm run build      # static site in ./out
 npm run preview    # serve ./out at http://localhost:3000
+npm run live       # live server for the online live view (section 8)
+npm start          # build + live server: the whole site and live view on http://localhost:8787
 ```
+
+Settings go in a `.env` file: `cp .env.example .env` and fill in what you need (every line is explained in the file).
 
 ## 3. On the event day
 
@@ -95,7 +100,7 @@ npm run preview    # serve ./out at http://localhost:3000
 7. When a prize runs out the next one is selected automatically (turn off *Next prize automatically* in *Display settings* to choose yourself). When everything has been drawn the display shows **All prizes drawn**.
 8. For the finale press **Show all winners** (or **W** on the display) for a full-screen list of every winner, grouped by prize.
 
-> **Both windows must be in the same browser on the same computer.** They talk to each other through the browser (BroadcastChannel + localStorage), which is why no server is needed. A phone opening the public link sees its own, empty copy — that is expected.
+> **Both windows must be in the same browser on the same computer.** They talk to each other through the browser (BroadcastChannel + localStorage), which is why no server is needed. A phone opening the public site sees its own, empty copy — that is expected. To let people watch on their phones, use the **online live view** (section 8): they open a special link instead.
 
 Data is saved automatically in the browser. Use **Backup & reset → Export backup** before the event, and keep the file. To move the draw to another laptop, restore that file there.
 
@@ -146,18 +151,75 @@ Click **Excel template** in the admin to download the ready-made file.
 - Fonts load from Google Fonts and are cached for offline use after the first visit. Without that visit and without internet, the page still works with system fonts. You can also run it locally with `npm run build && npm run preview`.
 - After a new deploy, the next online visit loads the new version automatically (pages are always fetched fresh when online).
 
+## 8. Online live view (watch on your phone)
+
+Let the audience follow the draw live on their own phones — at the venue or anywhere in the world. They see the welcome screen, the 3-2-1 countdown, the reel landing on the winner, the winner card with confetti, the winners list and the "Our winners" finale, all in real time. They can only watch; the draw itself still happens on the event laptop.
+
+### How it works
+
+```
+ Event laptop                          Live server (JSON file)              Audience phones
+ ┌────────────────┐   publishes each   ┌──────────────────────┐   pushes   ┌───────────────┐
+ │ Admin + Display│ ── screen change ─▶│ server/live-server.mjs│ ─ live ──▶ │ /live/?r=CODE │
+ └────────────────┘   (secret key)     │ data/live.json        │ (SSE)      └───────────────┘
+                                       └──────────────────────┘
+```
+
+- `server/live-server.mjs` is a tiny Node.js server with **no database and no extra packages**. Live rooms are stored in a **JSON file** (`data/live.json`).
+- Each live view is a *room* with a random code (e.g. `RZDGUSHA`) and a secret key. The key stays in the event laptop's browser; the server keeps only a hash of it, so nobody else can publish to your room.
+- Viewers get updates instantly over a live stream (Server-Sent Events). On networks that block streams they automatically switch to checking every 3 seconds.
+
+### Set it up
+
+1. **Start the live server** on the event laptop (or any computer/host that stays on):
+   ```bash
+   cp .env.example .env     # optional: set LIVE_CREATE_TOKEN (a password) and other options
+   npm install
+   npm start                # builds the site and starts the server on http://localhost:8787
+   ```
+   `npm start` serves the whole site too, so `http://localhost:8787/admin/` works without GitHub Pages. (`npm run live` starts only the server.)
+2. **Make it reachable from the internet.** Phones can't open `localhost`. The easiest free option is a Cloudflare quick tunnel ([install cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)):
+   ```bash
+   cloudflared tunnel --url http://localhost:8787
+   ```
+   It prints an address like `https://something-random.trycloudflare.com`. Keep that window open during the event. (Any Node.js host works as well — run `npm run live` there; note that free hosts often wipe files on restart, which only matters if you restart mid-event.)
+3. **In the admin → Online live view**, enter the server address (the tunnel address, or `http://localhost:8787` when you only test on the laptop), press **Test connection**, then **Go live**.
+4. **Share it:** the card shows the **link and QR code**. Turn on **QR code on the big screen** so the audience can scan it from the projector; it hides itself while the reel spins. The card also shows how many people are watching.
+5. **Keep the live display open** — it is what sends the screen to the viewers.
+6. Afterwards press **Stop live view**: viewers see "The live draw has ended" and the link stops working.
+
+### Settings (`.env`)
+
+| Setting | What it does |
+|---|---|
+| `NEXT_PUBLIC_LIVE_SERVER_URL` | Default server address pre-filled in the admin. For GitHub Pages set the repository **variable** `LIVE_SERVER_URL` instead. |
+| `PORT` | Live server port (default `8787`). |
+| `LIVE_DATA_FILE` | JSON file for live rooms (default `data/live.json`, ignored by git). |
+| `LIVE_CREATE_TOKEN` | Password needed to start a live view (enter it in the admin). Recommended when the server is on the internet. |
+| `ALLOWED_ORIGINS` | Only allow these sites to use the server, e.g. `https://falcon-98.github.io`. |
+| `STATIC_DIR` | Built site the server also serves (default `out`). |
+
+**Later — a database instead of the JSON file:** the website only talks to the server's small API (`POST /api/rooms`, `PUT /api/rooms/:code`, `GET /api/rooms/:code`, `GET /api/rooms/:code/events`). Moving to a hosted database such as Supabase means changing only `server/live-server.mjs`; `.env.example` already has a place for the connection details.
+
+### Privacy
+
+Everything sent to viewers is public to anyone with the link: the event branding, current prize, counts, up to 60 participant names for the floating bubbles, and the winners (name, ticket and branch, as on the big screen). The full participant list, exclusions and settings never leave the laptop.
+
 ## Project structure
 
 ```
 app/
   page.tsx            Live display
   admin/page.tsx      Admin console
+  live/page.tsx       Online live view for the audience's phones
   layout.tsx, globals.css
 components/
   Bubbles.tsx         Floating name bubbles
   Reel.tsx            Slot-machine reel
   Brand.tsx, Icons.tsx
   ServiceWorker.tsx   Registers the offline service worker
+  Stage.tsx           Countdown, winner name, confetti (shared by display and live view)
+  QrCode.tsx          QR codes for the live view link
   admin/              Import panel, participant list, PIN gate, switches
 lib/
   store.ts            State, localStorage + cross-window sync
@@ -165,9 +227,13 @@ lib/
   excel.ts            Excel/CSV import, template + winners export
   sound.ts            Synthesised sound effects (no audio files)
   config.ts           Branding and defaults
+  live.ts             Online live view: screen snapshot, publisher, server API
+server/
+  live-server.mjs     Live server (Node, no dependencies; stores rooms in data/live.json)
 public/
   sample-participants.csv   150 fictional participants (the "Demo data" button)
   sw.js                     Offline cache (service worker)
   manifest.webmanifest      Install-as-app details
+.env.example        All settings, explained (copy to .env)
 .github/workflows/deploy.yml   Build & deploy to GitHub Pages
 ```

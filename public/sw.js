@@ -42,6 +42,8 @@ self.addEventListener('fetch', (event) => {
   const sameOrigin = url.origin === self.location.origin;
   const fonts = url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com';
   if (!sameOrigin && !fonts) return;
+  // Live view API (when the live server also serves this site): always live, never cached.
+  if (sameOrigin && url.pathname.startsWith('/api/')) return;
 
   if (req.mode === 'navigate') {
     event.respondWith(

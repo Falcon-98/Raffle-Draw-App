@@ -50,11 +50,15 @@ jobs:
         run: npm run typecheck
 
       - name: Build static site
-        run: npm run build
+        run: |
+          # Optional default live server address (repository variable LIVE_SERVER_URL).
+          if [ -n "$LIVE_SERVER_URL" ]; then export NEXT_PUBLIC_LIVE_SERVER_URL="$LIVE_SERVER_URL"; fi
+          npm run build
         env:
           NEXT_PUBLIC_BASE_PATH: ${{ steps.base.outputs.path }}
           # Set this under Settings → Secrets and variables → Actions → Secrets
           NEXT_PUBLIC_ADMIN_PIN: ${{ secrets.ADMIN_PIN }}
+          LIVE_SERVER_URL: ${{ vars.LIVE_SERVER_URL }}
 
       - run: touch out/.nojekyll
 

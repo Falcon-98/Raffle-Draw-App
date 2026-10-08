@@ -51,6 +51,15 @@ export type Settings = {
   companyDisplay: CompanyDisplay;
   /** Winner name colours, left → right (3 gradient stops). */
   nameColors: string[];
+  /** Online live view (server/live-server.mjs). The room key only lives on this computer. */
+  live: LiveSettings;
+};
+
+export type LiveSettings = {
+  server: string; // live server address, e.g. https://abc.trycloudflare.com
+  password?: string; // only if the server sets LIVE_CREATE_TOKEN
+  room?: { code: string; key: string };
+  showQr: boolean; // show the join QR code on the big screen
 };
 
 export type CompanyDisplay = 'name' | 'logo' | 'both';
@@ -96,6 +105,7 @@ export const defaultState = (): RaffleState => ({
     companyName: BRAND.company,
     companyDisplay: 'name',
     nameColors: NAME_COLOR_PRESETS[0].colors,
+    live: { server: process.env.NEXT_PUBLIC_LIVE_SERVER_URL || '', showQr: false },
   },
   updatedAt: Date.now(),
 });
@@ -112,7 +122,7 @@ export function loadState(): RaffleState {
     return {
       participants: Array.isArray(parsed.participants) ? parsed.participants : [],
       winners: Array.isArray(parsed.winners) ? parsed.winners : [],
-      settings: { ...d.settings, ...(parsed.settings ?? {}) },
+      settings: { ...d.settings, ...(parsed.settings ?? {}), live: { ...d.settings.live, ...(parsed.settings?.live ?? {}) } },
       updatedAt: parsed.updatedAt ?? Date.now(),
     };
   } catch {

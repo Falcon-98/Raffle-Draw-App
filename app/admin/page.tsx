@@ -19,6 +19,9 @@ import {
 } from '@/components/Icons';
 import { BRAND, NAME_COLOR_PRESETS, asset } from '@/lib/config';
 import { downloadWinners } from '@/lib/excel';
+import QrCode from '@/components/QrCode';
+import { buildSnapshot, liveClose, liveCreateRoom, liveGet, liveHealth, livePublish, normalizeServer, viewerUrl } from '@/lib/live';
+import { poolFingerprint } from '@/lib/fair';
 import {
   type CompanyDisplay,
   type DisplayPhase,
@@ -102,6 +105,7 @@ function Admin() {
           <ParticipantList state={state} update={update} />
         </div>
         <div className="col">
+          <LiveCard state={state} update={update} online={online} />
           <WinnersCard state={state} update={update} />
           <PrizesCard state={state} update={update} />
           <SettingsCard state={state} update={update} />
@@ -226,6 +230,168 @@ function DrawControl({
           🏆 Show all winners
         </button>
       </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------- online live view */
+function LiveCard({ state, update, online }: CardProps & { online: boolean }) {
+  const live = state.settings.live;
+  const server = normalizeServer(live.server);
+  const room = live.room;
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [stats, setStats] = useState<{ viewers: number; updatedAt: number; seen: number } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const setLive = (patch: Partial<RaffleState['settings']['live']>) =>
+    update((s) => ({ ...s, settings: { ...s.settings, live: { ...s.settings.live, ...patch } } }));
+
+  // While live: how many people are watching, and when the screen was last sent.
+  useEffect(() => {
+    if (!room || !server) return;
+    let alive = true;
+    const go = async () => {
+      try {
+        const r = await liveGet(server, room.code);
+        if (alive) setStats({ viewers: r.viewers, updatedAt: r.updatedAt, seen: Date.now() });
+      } catch {
+        if (alive) setStats(null);
+      }
+    };
+    void go();
+    const t = setInterval(go, 5000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [server, room]);
+
+  const test = async () => {
+    setBusy(true);
+    try {
+      const h = await liveHealth(server);
+      setMsg({ ok: true, text: h.needsToken ? 'Connected. This server needs a password to go live.' : 'Connected to the live server.' });
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const goLive = async () => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await liveCreateRoom(server, live.password);
+      setLive({ server, room: r });
+      // Show something straight away if the display window isn't open yet (it takes over once open).
+      if (!online) {
+        const fingerprint = await poolFingerprint(eligible(state));
+        await livePublish(server, r, buildSnapshot(state, { phase: 'idle', current: null, reelPool: [], fingerprint }));
+      }
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const stop = async () => {
+    if (!room || !confirm('Stop the online live view? People watching will see "The live draw has ended" and this link stops working.')) return;
+    setBusy(true);
+    try {
+      await liveClose(server, room);
+    } catch {
+      /* server gone or room already closed: forget it anyway */
+    }
+    setLive({ room: undefined, showQr: false });
+    setStats(null);
+    setBusy(false);
+  };
+
+  const link = room ? viewerUrl(server, room.code) : '';
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      prompt('Copy this link:', link);
+    }
+  };
+  const ago = stats ? Math.max(0, Math.round((stats.seen - stats.updatedAt) / 1000)) : null;
+
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>📡 Online live view</h2>
+        {room && <span className={`pill status${stats ? ' on' : ''}`}><span className="dot" />{stats ? 'Live' : 'Server not reachable'}</span>}
+      </div>
+      {!room ? (
+        <>
+          <p className="help">
+            Let people watch the draw live on their own phones. Start the live server (<code>npm run live</code>, see the README), enter its address and press <b>Go live</b>.
+          </p>
+          <div className="col" style={{ gap: 10 }}>
+            <label className="field">
+              Live server address
+              <input className="input" value={live.server} placeholder="e.g. https://raffle-live.trycloudflare.com" onChange={(e) => setLive({ server: e.target.value })} />
+            </label>
+            <label className="field">
+              Server password <span className="note" style={{ margin: 0 }}>(only if the server has one)</span>
+              <input className="input" type="password" value={live.password ?? ''} onChange={(e) => setLive({ password: e.target.value || undefined })} />
+            </label>
+            <div className="row">
+              <button className="btn" onClick={() => void test()} disabled={!server || busy}>
+                Test connection
+              </button>
+              <button className="btn primary" onClick={() => void goLive()} disabled={!server || busy}>
+                📡 Go live
+              </button>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="col" style={{ gap: 12 }}>
+          <div className="live-share">
+            <QrCode value={link} label="QR code for the live view link" />
+            <div className="col" style={{ gap: 8, minWidth: 0 }}>
+              <span className="note" style={{ margin: 0 }}>
+                Share this link or QR code — viewers watch on their own devices:
+              </span>
+              <code className="live-link">{link}</code>
+              <div className="row">
+                <button className="btn sm" onClick={() => void copy()}>
+                  {copied ? '✓ Copied' : 'Copy link'}
+                </button>
+                <a className="btn sm" href={link} target="_blank" rel="noreferrer">
+                  Open viewer
+                </a>
+              </div>
+              <span className="note" style={{ margin: 0 }}>
+                {stats ? `👀 ${stats.viewers} watching · screen sent ${ago! < 2 ? 'just now' : `${ago}s ago`}` : 'Checking the live server…'}
+              </span>
+            </div>
+          </div>
+          {!online && (
+            <div className="alert">
+              <IconWarn />
+              <span>The live display sends the screen to viewers — keep it open while you are live.</span>
+            </div>
+          )}
+          <Setting title="QR code on the big screen" desc="Show the join code in a corner of the display (hidden while the reel spins)" checked={live.showQr} onChange={(v) => setLive({ showQr: v })} />
+          <div className="row">
+            <button className="btn danger" onClick={() => void stop()} disabled={busy}>
+              Stop live view
+            </button>
+          </div>
+        </div>
+      )}
+      {msg && (
+        <p className="note" style={{ color: msg.ok ? 'var(--green)' : 'var(--red)', marginBottom: 0 }}>
+          {msg.text}
+        </p>
+      )}
     </div>
   );
 }
