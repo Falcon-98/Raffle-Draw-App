@@ -52,25 +52,25 @@ export default function Reel({
     const track = trackRef.current;
     const reel = reelRef.current;
     if (!track || !reel) return;
-    const first = track.firstElementChild as HTMLElement | null;
-    const h = first?.getBoundingClientRect().height || 80;
-    const total = winIndex * h;
     const startAt = performance.now();
     let raf = 0;
     let lastIdx = -1;
     let lastTick = 0;
-    let lastPos = 0;
+    let lastRow = 0;
 
     const frame = (now: number) => {
       const t = Math.min(1, (now - startAt) / durationMs);
-      const pos = ease(t) * total;
+      const row = t < 1 ? ease(t) * winIndex : winIndex; // position in rows; ends exactly on the winner
+      // Move the strip by a percentage of its own height (all rows are the same height), so
+      // nothing is measured in pixels: the reel's zoom-in transition, fractional row sizes
+      // and resizing / full screen mid-spin can't make it stop on a different name.
       // Rows are offset by 2 so row `i` sits in the centre window.
-      track.style.transform = `translate3d(0, ${-(pos) + 2 * h}px, 0)`;
-      const speed = Math.abs(pos - lastPos);
-      lastPos = pos;
-      track.style.filter = speed > h * 0.25 ? `blur(${Math.min(5, speed / h)}px)` : 'none';
+      track.style.transform = `translate3d(0, ${((2 - row) / items.length) * 100}%, 0)`;
+      const speed = Math.abs(row - lastRow);
+      lastRow = row;
+      track.style.filter = speed > 0.25 ? `blur(${Math.min(5, speed)}px)` : 'none';
 
-      const idx = Math.floor(pos / h + 0.5);
+      const idx = Math.floor(row + 0.5);
       if (idx !== lastIdx) {
         lastIdx = idx;
         if (sound && now - lastTick > 40) {

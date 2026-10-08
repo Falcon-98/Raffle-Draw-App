@@ -1,7 +1,11 @@
 name: Deploy to GitHub Pages
 
+# CI: every pull request to main is type-checked and built (nothing is deployed).
+# CD: every push to main (or a manual run) builds and publishes the site to GitHub Pages.
 on:
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
   workflow_dispatch:
 
@@ -11,16 +15,16 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && format('ci-{0}', github.ref) || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -38,8 +42,12 @@ jobs:
       # Fails with a clear message if Pages is not enabled for this repository.
       # Settings → Pages → Source must be "GitHub Actions" (not "Deploy from a branch").
       - uses: actions/configure-pages@v5
+        if: github.event_name != 'pull_request'
 
       - run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
 
       - name: Build static site
         run: npm run build
@@ -51,10 +59,12 @@ jobs:
       - run: touch out/.nojekyll
 
       - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
         with:
           path: out
 
   deploy:
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     environment:
@@ -62,4 +72,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

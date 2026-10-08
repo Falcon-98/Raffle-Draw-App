@@ -18,6 +18,8 @@ Everything runs in the browser. There is no server and no database, so nothing t
 
 Every push to `main` builds the site and publishes it with GitHub Actions (`.github/workflows/deploy.yml`). Progress is visible in the repository's **Actions** tab; a deploy takes about a minute.
 
+The same workflow is also the CI check: every pull request into `main` is type-checked and built (but not deployed), so a broken change shows a red ❌ on the pull request before it can reach the live site. It is the only workflow needed — do not add GitHub's sample *Next.js* Pages workflow on top of it: that sample rewrites `next.config.mjs`, fails, and would race this deploy.
+
 ### One-time setup (repository owner)
 
 1. **Settings → Pages → Build and deployment → Source: choose _GitHub Actions_.**
@@ -82,6 +84,7 @@ Click **Excel template** in the admin to download the ready-made file.
 
 - **Certified randomness** — winners are picked with the browser's cryptographic generator (`crypto.getRandomValues`) with rejection sampling, so every eligible person has exactly the same chance. `Math.random` is only used for the decorative reel filler.
 - **Result locked first** — the winner is chosen and saved *before* the reel starts. The animation only reveals it; refreshing the page cannot re-roll a result.
+- **The reel always stops on the winner** — the name that lands in the window is always the saved, announced winner, on any screen size (including 1024×768 projectors) and even if the window is resized or switched to full screen mid-spin.
 - **Pool fingerprint** — the footer shows a short SHA-256 fingerprint of the eligible list. It only changes if someone is added or removed, so you can show it before the first draw and anyone can see it stays consistent. Each winner record stores the fingerprint and pool size at that moment.
 - **Audit export** — **Winners → Excel** gives draw number, prize, name, ticket, time, pool size and fingerprint.
 - **One prize per person** (on by default) automatically removes winners from later draws.
