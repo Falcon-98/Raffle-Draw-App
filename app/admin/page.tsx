@@ -665,11 +665,75 @@ const PRESETS: { label: string; w: number; h: number }[] = [
   { label: 'Portrait', w: 1080, h: 1920 },
 ];
 
+const MAX_PX = 16384;
+
+/**
+ * A pixel box you can type into freely: what you type stays as typed (you can clear it, or start
+ * with "-"), valid numbers apply to the display straight away, and the value is tidied up
+ * (rounded, kept in range) when you leave the box or press Enter. Esc undoes, ↑/↓ step 1 (Shift 10).
+ */
+function PixelField({ label, value, min, max, onCommit }: { label: string; value: number; min: number; max: number; onCommit: (v: number) => void }) {
+  const [draft, setDraft] = useState<string | null>(null); // null = not editing, show the saved value
+  const before = useRef(value); // value when editing started (Esc goes back to it)
+  const cancelled = useRef(false);
+  const parse = (t: string) => {
+    const v = Number(t.trim());
+    return t.trim() !== '' && Number.isFinite(v) ? Math.round(v) : null;
+  };
+  const inRange = (v: number) => v >= min && v <= max;
+  const finish = () => {
+    if (cancelled.current) {
+      cancelled.current = false;
+      return;
+    }
+    if (draft === null) return;
+    const v = parse(draft);
+    if (v !== null) onCommit(Math.min(max, Math.max(min, v)));
+    setDraft(null);
+  };
+  return (
+    <label className="field">
+      {label}
+      <input
+        className="input"
+        type="text"
+        inputMode="numeric"
+        autoComplete="off"
+        value={draft ?? String(value)}
+        onFocus={() => (before.current = value)}
+        onChange={(e) => {
+          const t = e.target.value.replace(/[^\d-]/g, '');
+          setDraft(t);
+          const v = parse(t);
+          if (v !== null && inRange(v)) onCommit(v);
+        }}
+        onBlur={finish}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            finish();
+            e.currentTarget.blur();
+          } else if (e.key === 'Escape') {
+            if (before.current !== value) onCommit(before.current);
+            cancelled.current = true;
+            setDraft(null);
+            e.currentTarget.blur();
+          } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            const base = parse(draft ?? String(value)) ?? value;
+            const v = Math.min(max, Math.max(min, base + (e.key === 'ArrowUp' ? 1 : -1) * (e.shiftKey ? 10 : 1)));
+            setDraft(String(v));
+            onCommit(v);
+          }
+        }}
+      />
+    </label>
+  );
+}
+
 function ScreenCard({ state, update, win }: CardProps & { win?: WinInfo }) {
   const sc = state.settings.screen;
   const set = (patch: Partial<ScreenSettings>) =>
     update((s) => ({ ...s, settings: { ...s.settings, screen: { ...s.settings.screen, ...patch } } }));
-  const num = (v: string, min: number) => Math.max(min, Math.round(Number(v) || 0));
   const pct = Math.round(sc.scale * 100);
 
   return (
@@ -717,22 +781,10 @@ function ScreenCard({ state, update, win }: CardProps & { win?: WinInfo }) {
 
           <div className="sub-label">Exact pixels</div>
           <div className="num-grid">
-            <label className="field">
-              Width
-              <input className="input" type="number" min={100} value={sc.width} onChange={(e) => set({ width: num(e.target.value, 100) })} />
-            </label>
-            <label className="field">
-              Height
-              <input className="input" type="number" min={100} value={sc.height} onChange={(e) => set({ height: num(e.target.value, 100) })} />
-            </label>
-            <label className="field">
-              Left (X)
-              <input className="input" type="number" value={sc.x} onChange={(e) => set({ x: Math.round(Number(e.target.value) || 0) })} />
-            </label>
-            <label className="field">
-              Top (Y)
-              <input className="input" type="number" value={sc.y} onChange={(e) => set({ y: Math.round(Number(e.target.value) || 0) })} />
-            </label>
+            <PixelField label="Width" value={sc.width} min={100} max={MAX_PX} onCommit={(v) => set({ width: v })} />
+            <PixelField label="Height" value={sc.height} min={100} max={MAX_PX} onCommit={(v) => set({ height: v })} />
+            <PixelField label="Left (X)" value={sc.x} min={-MAX_PX} max={MAX_PX} onCommit={(v) => set({ x: v })} />
+            <PixelField label="Top (Y)" value={sc.y} min={-MAX_PX} max={MAX_PX} onCommit={(v) => set({ y: v })} />
           </div>
           <div className="row" style={{ marginTop: 10 }}>
             <button className="btn sm" onClick={() => set({ x: 0, y: 0 })}>
