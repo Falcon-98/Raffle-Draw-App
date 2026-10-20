@@ -79,6 +79,14 @@ export default function Reel({
     let lastIdx = -1;
     let lastTick = 0;
     let lastRow = 0;
+    const win = reel.querySelector('.reel-window') as HTMLElement | null;
+    const first = track.firstElementChild as HTMLElement | null;
+    // Rows above the centre window: 2 with 5 rows, 1 on short LED strips (3 rows). Layout sizes
+    // (offsetTop/offsetHeight) ignore CSS transforms, so LED zoom/rotation can't skew it.
+    const above = () => {
+      const h = first?.offsetHeight;
+      return win && h ? Math.round(win.offsetTop / h) : 2;
+    };
 
     const frame = (now: number) => {
       const t = Math.min(1, (now - (startedAt.current ?? now)) / durationMs);
@@ -86,8 +94,9 @@ export default function Reel({
       // Move the strip by a percentage of its own height (all rows are the same height), so
       // nothing is measured in pixels: the reel's zoom-in transition, fractional row sizes
       // and resizing / full screen mid-spin can't make it stop on a different name.
-      // Rows are offset by 2 so row `i` sits in the centre window.
-      track.style.transform = `translate3d(0, ${((2 - row) / items.length) * 100}%, 0)`;
+      // Rows are offset by `above()` so row `i` sits in the centre window (re-read every frame,
+      // so changing the LED layout mid-spin still lands on the winner).
+      track.style.transform = `translate3d(0, ${((above() - row) / items.length) * 100}%, 0)`;
       const speed = Math.abs(row - lastRow);
       lastRow = row;
       track.style.filter = speed > 0.25 ? `blur(${Math.min(5, speed)}px)` : 'none';

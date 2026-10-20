@@ -109,8 +109,8 @@ a {
 
 .bg .blob {
   position: absolute;
-  width: 46vmax;
-  height: 46vmax;
+  width: 46cqmax;
+  height: 46cqmax;
   border-radius: 50%;
   filter: blur(80px);
   opacity: 0.42;
@@ -118,14 +118,14 @@ a {
   animation: blob 22s ease-in-out infinite alternate;
 }
 
-.bg .b1 { background: var(--pink); top: -18vmax; left: -12vmax; }
-.bg .b2 { background: var(--violet); bottom: -22vmax; right: -14vmax; animation-delay: -6s; animation-duration: 26s; }
-.bg .b3 { background: var(--cyan); top: 30%; left: 55%; width: 30vmax; height: 30vmax; opacity: 0.25; animation-delay: -12s; }
+.bg .b1 { background: var(--pink); top: -18cqmax; left: -12cqmax; }
+.bg .b2 { background: var(--violet); bottom: -22cqmax; right: -14cqmax; animation-delay: -6s; animation-duration: 26s; }
+.bg .b3 { background: var(--cyan); top: 30%; left: 55%; width: 30cqmax; height: 30cqmax; opacity: 0.25; animation-delay: -12s; }
 
 @keyframes blob {
   0% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(6vmax, 4vmax) scale(1.12); }
-  100% { transform: translate(-4vmax, 7vmax) scale(0.95); }
+  50% { transform: translate(6cqmax, 4cqmax) scale(1.12); }
+  100% { transform: translate(-4cqmax, 7cqmax) scale(0.95); }
 }
 
 .bg .grid {
@@ -163,6 +163,7 @@ a {
    Display (audience screen)
    ========================================================================== */
 .stage {
+  container: stage / inline-size;
   position: relative;
   min-height: 100dvh;
   overflow-x: clip;
@@ -181,7 +182,7 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px clamp(16px, 3vw, 40px);
+  padding: clamp(10px, 2.2cqh, 18px) clamp(16px, 3cqw, 48px);
 }
 
 .brand {
@@ -208,7 +209,7 @@ a {
   object-fit: contain;
 }
 
-@media (max-width: 640px) {
+@container stage (max-width: 640px) {
   .brand-logo {
     height: 36px;
     max-width: 104px;
@@ -305,7 +306,7 @@ a {
   display: grid;
   grid-template-columns: 1fr;
   gap: 24px;
-  padding: 0 clamp(16px, 3vw, 40px) 16px;
+  padding: 0 clamp(16px, 3cqw, 48px) 16px;
   align-items: center;
 }
 
@@ -316,7 +317,7 @@ a {
 .center {
   display: grid;
   place-items: center;
-  min-height: 60vh;
+  min-height: 50cqh;
   text-align: center;
 }
 
@@ -327,7 +328,7 @@ a {
   flex-direction: column;
   align-items: center;
   gap: 18px;
-  padding: clamp(24px, 4vw, 48px);
+  padding: clamp(12px, min(4cqw, 4cqh), 56px);
   max-width: 920px;
 }
 
@@ -357,7 +358,7 @@ a {
   background: var(--grad-warm);
   color: #1a0b2e;
   font-weight: 800;
-  font-size: clamp(14px, 1.6vw, 18px);
+  font-size: clamp(14px, min(1.6cqw, 2.6cqh), 30px);
   box-shadow: 0 10px 40px -10px rgba(255, 122, 89, 0.8);
   letter-spacing: 0.02em;
 }
@@ -370,7 +371,7 @@ a {
 .title {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: clamp(48px, 10vw, 128px);
+  font-size: clamp(40px, min(10cqw, 15cqh), 220px);
   line-height: 0.92;
   letter-spacing: -0.03em;
   margin: 0;
@@ -382,7 +383,7 @@ a {
 
 .subtitle {
   margin: 0;
-  font-size: clamp(16px, 2vw, 22px);
+  font-size: clamp(15px, min(2cqw, 3cqh), 36px);
   color: var(--muted);
   max-width: 34ch;
 }
@@ -407,7 +408,7 @@ a {
 .stat b {
   display: block;
   font-family: var(--font-display);
-  font-size: clamp(24px, 3vw, 34px);
+  font-size: clamp(22px, min(3cqw, 4.4cqh), 56px);
   line-height: 1.1;
 }
 
@@ -429,7 +430,7 @@ a {
   background-size: 200% 100%;
   color: #fff;
   font-family: var(--font-display);
-  font-size: clamp(18px, 2.2vw, 24px);
+  font-size: clamp(18px, min(2.2cqw, 3.4cqh), 40px);
   font-weight: 800;
   letter-spacing: 0.02em;
   box-shadow: 0 18px 50px -12px rgba(139, 92, 246, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.35);
@@ -587,10 +588,11 @@ kbd {
 }
 
 .reel {
-  --item: clamp(64px, 10vw, 112px);
+  --rows: 5;
+  --item: clamp(48px, min(10cqw, 12cqh), 180px);
   position: relative;
   width: 100%;
-  height: calc(var(--item) * 5);
+  height: calc(var(--item) * var(--rows));
   overflow: hidden;
   border-radius: 28px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04));
@@ -603,7 +605,7 @@ kbd {
   position: absolute;
   left: 12px;
   right: 12px;
-  top: calc(var(--item) * 2);
+  top: calc(var(--item) * (var(--rows) - 1) / 2);
   height: var(--item);
   border-radius: 18px;
   background: linear-gradient(100deg, rgba(255, 61, 139, 0.2), rgba(139, 92, 246, 0.25), rgba(34, 211, 238, 0.2));
@@ -672,7 +674,7 @@ kbd {
 }
 
 .picking {
-  font-size: clamp(14px, 1.6vw, 18px);
+  font-size: clamp(14px, min(1.6cqw, 2.6cqh), 30px);
   color: var(--muted);
 }
 
@@ -686,7 +688,7 @@ kbd {
 .winner-card {
   position: relative;
   width: min(880px, 100%);
-  padding: clamp(28px, 5vw, 56px) clamp(20px, 4vw, 48px);
+  padding: clamp(18px, min(5cqw, 5cqh), 72px) clamp(20px, 4cqw, 64px);
   border-radius: 32px;
   background: linear-gradient(160deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04));
   border: 1px solid var(--line-strong);
@@ -736,8 +738,8 @@ kbd {
 }
 
 .trophy {
-  width: clamp(64px, 9vw, 96px);
-  height: clamp(64px, 9vw, 96px);
+  width: clamp(48px, min(9cqw, 11cqh), 150px);
+  height: clamp(48px, min(9cqw, 11cqh), 150px);
   margin: 0 auto 10px;
   filter: drop-shadow(0 10px 30px rgba(255, 197, 66, 0.7));
 }
@@ -745,7 +747,7 @@ kbd {
 .congrats {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: clamp(20px, 3vw, 32px);
+  font-size: clamp(18px, min(3cqw, 4.4cqh), 52px);
   letter-spacing: 0.04em;
   margin: 6px 0 4px;
 }
@@ -753,7 +755,7 @@ kbd {
 .winner-name {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: clamp(40px, 8vw, 104px);
+  font-size: clamp(34px, min(8cqw, 13cqh), 180px);
   line-height: 1;
   letter-spacing: -0.02em;
   margin: 12px 0 14px;
@@ -823,7 +825,7 @@ kbd {
   align-self: start;
   display: flex;
   flex-direction: column;
-  max-height: calc(100dvh - 180px);
+  max-height: calc(100cqh - 160px);
   padding: 18px;
   border-radius: var(--radius);
   background: rgba(14, 10, 40, 0.65);
@@ -902,7 +904,7 @@ kbd {
   flex-wrap: wrap;
   justify-content: center;
   gap: 8px 22px;
-  padding: 14px clamp(16px, 3vw, 40px) 18px;
+  padding: clamp(8px, 1.6cqh, 14px) clamp(16px, 3cqw, 48px) clamp(10px, 2cqh, 18px);
   font-size: 13px;
   color: var(--muted);
 }
@@ -926,11 +928,18 @@ kbd {
   letter-spacing: 0.06em;
 }
 
-.toast {
+.toast-wrap {
   position: fixed !important;
-  left: 50%;
+  left: 0;
+  right: 0;
   bottom: 70px;
-  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.toast {
   z-index: 50;
   padding: 12px 20px;
   border-radius: 14px;
@@ -938,7 +947,7 @@ kbd {
   border: 1px solid var(--line-strong);
   box-shadow: var(--shadow);
   font-weight: 600;
-  max-width: calc(100vw - 32px);
+  max-width: calc(100cqw - 32px);
 }
 
 .sound-chip {
@@ -961,10 +970,11 @@ kbd {
 .countdown {
   display: grid;
   place-items: center;
-  height: calc(clamp(64px, 10vw, 112px) * 5);
+  --rows: 5;
+  height: calc(clamp(48px, min(10cqw, 12cqh), 180px) * var(--rows)); /* same height as the reel */
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: clamp(140px, 26vw, 320px);
+  font-size: clamp(100px, min(26cqw, 36cqh), 480px);
   line-height: 1;
 }
 
@@ -980,12 +990,12 @@ kbd {
 }
 
 .showcase .trophy {
-  width: clamp(56px, 7vw, 88px);
+  width: clamp(48px, min(7cqw, 9cqh), 130px);
   height: auto;
 }
 
 .showcase .title {
-  font-size: clamp(40px, 7vw, 96px);
+  font-size: clamp(36px, min(7cqw, 10cqh), 150px);
 }
 
 .showcase-grid {
@@ -1037,7 +1047,7 @@ kbd {
 .showcase-group .who {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: clamp(18px, 1.8vw, 24px);
+  font-size: clamp(18px, min(1.8cqw, 3cqh), 34px);
 }
 
 .showcase-group .what {
@@ -1110,7 +1120,7 @@ kbd {
 }
 
 .join-qr .qr {
-  width: clamp(88px, 9vw, 132px);
+  width: clamp(88px, min(9cqw, 14cqh), 200px);
   border-radius: 8px;
   overflow: hidden;
   background: #fff;
@@ -1145,7 +1155,7 @@ kbd {
 
 .live-msg h1 {
   font-family: var(--font-display);
-  font-size: clamp(28px, 6vw, 40px);
+  font-size: clamp(28px, 6cqw, 40px);
   margin: 12px 0 8px;
 }
 
@@ -1891,8 +1901,8 @@ input[type='range'] {
 
 .prize-list li {
   display: grid;
-  grid-template-columns: auto 1fr auto auto auto;
-  gap: 10px;
+  grid-template-columns: auto auto 1fr auto auto auto auto; /* ↑ ↓ name left qty ✎ × */
+  gap: 8px;
   align-items: center;
   padding: 8px 10px;
   border-radius: 12px;
@@ -2091,10 +2101,195 @@ input[type='range'] {
   align-items: end;
 }
 
+/* Admin: draw progress & LED screen */
+.bar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  margin: 4px 0 14px;
+}
+
+.bar > span {
+  display: block;
+  height: 100%;
+  background: var(--grad);
+  transition: width 0.5s;
+}
+
+.num-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.num-grid .input {
+  padding: 9px 10px;
+}
+
+.sub-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 14px 0 8px;
+}
+
+@media (max-width: 640px) {
+  .num-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 /* ==========================================================================
-   Responsive
+   LED / screen canvas
    ========================================================================== */
-@media (max-width: 1100px) {
+.screen-host {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  overflow: hidden;
+}
+
+.screen-box {
+  position: absolute;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.screen-content {
+  container: canvas / size;
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: hidden;
+}
+
+.screen-content .stage {
+  min-height: 100%;
+  height: 100%;
+}
+
+/* Plain mode: behave like a normal page (scrolls on phones, fixed = viewport) */
+.screen-host.plain,
+.screen-host.plain .screen-box,
+.screen-host.plain .screen-content {
+  position: static;
+  inset: auto;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  transform: none;
+  container-type: normal;
+  background: none;
+}
+
+.screen-host.plain .screen-content .stage {
+  min-height: 100dvh;
+  height: auto;
+}
+
+.confetti-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 60;
+}
+
+.plain .confetti-canvas {
+  position: fixed;
+}
+
+.guides {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  pointer-events: none;
+  border: 3px dashed #22d3ee;
+}
+
+.plain .guides {
+  position: fixed;
+}
+
+.guides .g-corner {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  border: 0 solid #ffc542;
+}
+
+.g-corner.tl { left: 0; top: 0; border-left-width: 8px; border-top-width: 8px; }
+.g-corner.tr { right: 0; top: 0; border-right-width: 8px; border-top-width: 8px; }
+.g-corner.bl { left: 0; bottom: 0; border-left-width: 8px; border-bottom-width: 8px; }
+.g-corner.br { right: 0; bottom: 0; border-right-width: 8px; border-bottom-width: 8px; }
+
+.guides .g-cross {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 80px;
+  height: 80px;
+  transform: translate(-50%, -50%);
+  background:
+    linear-gradient(#ffc542, #ffc542) center / 4px 100% no-repeat,
+    linear-gradient(#ffc542, #ffc542) center / 100% 4px no-repeat;
+}
+
+.guides .g-label {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 56px);
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #ffc542;
+  font: 700 14px/1.3 ui-monospace, Menlo, monospace;
+  white-space: nowrap;
+}
+
+/* Finale (all prizes drawn) */
+.finale-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  max-width: 900px;
+  margin-top: 4px;
+}
+
+.progress {
+  width: min(420px, 100%);
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.progress > span {
+  display: block;
+  height: 100%;
+  background: var(--grad);
+  border-radius: inherit;
+  transition: width 0.6s ease;
+}
+
+.prize-count {
+  font-size: clamp(12px, min(1.2cqw, 2cqh), 22px);
+  color: var(--muted);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* ==========================================================================
+   Responsive — live display follows its own canvas size (container queries)
+   ========================================================================== */
+@container stage (max-width: 1100px) {
   .stage-body.with-board {
     grid-template-columns: 1fr;
   }
@@ -2102,13 +2297,52 @@ input[type='range'] {
   .board {
     max-height: none;
   }
-
-  .admin-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
-@media (max-width: 640px) {
+/* Wide, short canvases such as LED strips */
+@container canvas (max-height: 600px) {
+  .stage .kicker,
+  .stage .hint,
+  .stage .subtitle,
+  .stage .verify,
+  .stage .trust .opt,
+  .stage .trophy,
+  .stage .stats { display: none; }
+  .stage .hero { gap: 1.6cqh; }
+  .stage .reel,
+  .stage .countdown { --rows: 3; }
+  .stage .showcase .trophy,
+  .stage .help-chip { display: none; }
+  .stage .stats { margin-top: 0; }
+  .stage .stat { padding: 6px 14px; }
+  .stage .draw-btn { margin-top: 0; padding: 2.4cqh 40px; }
+  .stage .winner-name { margin: 1cqh 0; }
+  .stage .next-btn { margin-top: 1.4cqh; }
+  .stage .bubbles { inset: 60px 0 40px; }
+}
+
+/* Short windows / phones in landscape (display at 100 %, and the online live view) */
+@media (max-height: 600px) {
+  .plain .stage .kicker,
+  .plain .stage .hint,
+  .plain .stage .subtitle,
+  .plain .stage .trust .opt,
+  .plain .stage .trophy,
+  .live-view .kicker,
+  .live-view .hint,
+  .live-view .subtitle,
+  .live-view .trophy { display: none; }
+  .plain .stage .reel,
+  .plain .stage .countdown,
+  .live-view .reel,
+  .live-view .countdown { --rows: 3; }
+}
+
+@container stage (max-width: 640px) {
+  .stage .hide-sm {
+    display: none !important;
+  }
+
   .brand-event {
     font-size: 18px;
   }
@@ -2123,7 +2357,7 @@ input[type='range'] {
   }
 
   .center {
-    min-height: 66vh;
+    min-height: 60cqh;
   }
 
   .stat {
@@ -2156,9 +2390,32 @@ input[type='range'] {
     border-radius: 20px;
   }
 
+  .countdown {
+    height: calc(58px * var(--rows));
+  }
+
   .reel-item {
     padding: 0 18px;
     font-size: 24px;
+  }
+
+  .trust {
+    font-size: 12px;
+    gap: 6px 14px;
+  }
+}
+
+/* Admin console (normal page, viewport media queries) */
+@media (max-width: 1100px) {
+  .admin-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin .hide-sm,
+  .gate .hide-sm {
+    display: none !important;
   }
 
   .kpis {
@@ -2168,11 +2425,6 @@ input[type='range'] {
   .grid-2,
   .grid-3 {
     grid-template-columns: 1fr;
-  }
-
-  .trust {
-    font-size: 12px;
-    gap: 6px 14px;
   }
 
   .card {

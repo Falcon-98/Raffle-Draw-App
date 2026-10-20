@@ -249,6 +249,8 @@ export default function LivePage() {
   const boardWinners = hiddenId ? snap.winners.filter((w) => w.id !== hiddenId) : snap.winners;
   const showBoard = boardWinners.length > 0 && phase !== 'showcase';
   const statusLabel = conn === 'live' ? 'LIVE' : conn === 'ended' || conn === 'notfound' ? 'ENDED' : 'RECONNECTING…';
+  const totals = snap.prize.totals; // missing from older display versions
+  const finished = !!totals && totals.total > 0 && totals.left === 0;
 
   return (
     <main className="stage live-view">
@@ -273,19 +275,30 @@ export default function LivePage() {
           <AnimatePresence mode="wait">
             {phase === 'idle' && (
               <motion.div key="idle" className="hero" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-                <span className="kicker">{conn === 'ended' ? 'The draw has ended' : snap.prize.ok ? 'Now drawing' : 'Draw complete'}</span>
-                <span className="prize-pill">
-                  <IconGift /> {snap.prize.current}
-                  {snap.prize.qty > 1 && snap.prize.ok && (
-                    <span className="prize-left">
-                      {snap.prize.left} of {snap.prize.qty} left
-                    </span>
-                  )}
-                </span>
+                <span className="kicker">{conn === 'ended' ? 'The draw has ended' : finished ? 'The draw is complete' : snap.prize.ok ? 'Now drawing' : 'Draw complete'}</span>
+                {finished ? (
+                  <span className="prize-pill">
+                    <IconTrophy /> All {totals.total} prizes drawn
+                  </span>
+                ) : (
+                  <span className="prize-pill">
+                    <IconGift /> {snap.prize.current}
+                    {snap.prize.qty > 1 && snap.prize.ok && (
+                      <span className="prize-left">
+                        {snap.prize.left} of {snap.prize.qty} left
+                      </span>
+                    )}
+                  </span>
+                )}
+                {totals && totals.total > 1 && !finished && snap.prize.ok && snap.prizes.includes(snap.prize.current) && (
+                  <span className="prize-count">
+                    Prize {totals.drawn + 1} of {totals.total}
+                  </span>
+                )}
                 <h1 className="title">
                   <span className="grad-text">{b.eventTitle}</span>
                 </h1>
-                <p className="subtitle">{b.eventSubtitle}</p>
+                <p className="subtitle">{finished ? 'Thank you for joining us — congratulations to all our winners!' : b.eventSubtitle}</p>
                 <div className="stats">
                   <div className="stat">
                     <b>{snap.counts.entries.toLocaleString()}</b>
@@ -296,10 +309,15 @@ export default function LivePage() {
                     <span>In the draw</span>
                   </div>
                   <div className="stat">
-                    <b>{snap.counts.winners}</b>
-                    <span>Winners</span>
+                    <b>{totals?.total ? totals.left : snap.counts.winners}</b>
+                    <span>{totals?.total ? 'Prizes left' : 'Winners'}</span>
                   </div>
                 </div>
+                {!!totals?.total && (
+                  <div className="progress" aria-label={`${totals.drawn} of ${totals.total} prizes drawn`}>
+                    <span style={{ width: `${(totals.drawn / totals.total) * 100}%` }} />
+                  </div>
+                )}
                 <span className="hint">You&apos;re watching live — the next draw appears here automatically.</span>
               </motion.div>
             )}

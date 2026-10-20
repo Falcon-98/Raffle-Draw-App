@@ -26,14 +26,19 @@ import {
   type CompanyDisplay,
   type DisplayPhase,
   type RaffleState,
+  type ScreenSettings,
+  type WinInfo,
   activeWinners,
   canDrawPrize,
+  defaultScreen,
   defaultState,
   eligible,
+  migrate,
   nameGradient,
   nextPrize,
   prizeLeft,
   prizeQty,
+  prizeTotals,
   sendCommand,
   uid,
   useCommands,
@@ -50,11 +55,11 @@ export default function AdminPage() {
 
 function Admin() {
   const { state, update } = useRaffle();
-  const [display, setDisplay] = useState<{ phase: DisplayPhase; at: number } | null>(null);
+  const [display, setDisplay] = useState<{ phase: DisplayPhase; at: number; win?: WinInfo } | null>(null);
   const [now, setNow] = useState(Date.now());
 
   useCommands((cmd) => {
-    if (cmd.type === 'status') setDisplay({ phase: cmd.phase, at: cmd.at });
+    if (cmd.type === 'status') setDisplay({ phase: cmd.phase, at: cmd.at, win: cmd.win });
   });
 
   useEffect(() => {
@@ -108,6 +113,7 @@ function Admin() {
           <LiveCard state={state} update={update} online={online} />
           <WinnersCard state={state} update={update} />
           <PrizesCard state={state} update={update} />
+          <ScreenCard state={state} update={update} win={online ? display?.win : undefined} />
           <SettingsCard state={state} update={update} />
           <BackupCard state={state} update={update} />
         </div>
@@ -140,6 +146,15 @@ function DrawControl({
   const busy = phase === 'spinning' || phase === 'countdown';
   const prizeOk = canDrawPrize(state);
   const won = activeWinners(state).length;
+  const totals = prizeTotals(state);
+  const listed = state.settings.prizes.includes(state.settings.currentPrize);
+  const qty = listed ? prizeQty(state, state.settings.currentPrize) : 1;
+  const left = listed ? prizeLeft(state, state.settings.currentPrize) : 1;
+  const label = busy
+    ? 'Drawing…'
+    : totals.total > 0 && totals.left === 0
+      ? `All ${totals.total} prizes drawn`
+      : `Draw a winner for “${state.settings.currentPrize}”${prizeOk && qty > 1 ? ` (${qty - left + 1} of ${qty})` : ''}`;
 
   return (
     <div className="card" style={{ borderColor: 'rgba(139,92,246,.45)' }}>
@@ -162,9 +177,12 @@ function DrawControl({
           <b>{excluded.toLocaleString()}</b>
           <span>Excluded</span>
         </div>
-        <div className="kpi">
-          <b>{won}</b>
-          <span>Winners</span>
+        <div className="kpi" title={`${won} winner${won === 1 ? '' : 's'} so far`}>
+          <b>
+            {totals.left}
+            <small style={{ fontSize: 14, color: 'var(--muted)' }}> / {totals.total}</small>
+          </b>
+          <span>Prizes left</span>
         </div>
       </div>
 
@@ -177,9 +195,15 @@ function DrawControl({
         </div>
       )}
 
-      <p className="note" style={{ margin: '0 0 8px' }}>
-        Prize for the next draw
-      </p>
+      <div className="row" style={{ justifyContent: 'space-between' }}>
+        <span className="note">Prize for the next draw — tap one to jump to it</span>
+        <span className="note">
+          {totals.drawn} of {totals.total} drawn
+        </span>
+      </div>
+      <div className="bar">
+        <span style={{ width: `${totals.total ? (totals.drawn / totals.total) * 100 : 0}%` }} />
+      </div>
       <div className="chips" style={{ marginBottom: 16 }}>
         {state.settings.prizes.map((p) => {
           const left = prizeLeft(state, p);
@@ -202,7 +226,9 @@ function DrawControl({
           <IconWarn />
           <span>
             All “{state.settings.currentPrize}” prizes have been drawn.{' '}
-            {nextPrize(state, state.settings.currentPrize) ? 'Pick the next prize above.' : 'Every prize has been drawn — press Show all winners for the finale.'}
+            {nextPrize(state, state.settings.currentPrize)
+              ? 'Pick the next prize above.'
+              : 'Every prize has its winner — press Show all winners for the finale. To draw more, add a prize or raise a quantity in Prizes.'}
           </span>
         </div>
       )}
@@ -212,7 +238,7 @@ function DrawControl({
         disabled={!online || !pool.length || busy || !prizeOk}
         onClick={() => sendCommand({ type: 'draw', requestId: uid() })}
       >
-        <IconSparkle /> {busy ? 'Drawing…' : `Draw a winner for “${state.settings.currentPrize}”`}
+        <IconSparkle /> {label}
       </button>
       {!online && (
         <button className="btn" style={{ width: '100%', marginTop: 10 }} onClick={openDisplay}>
@@ -404,8 +430,16 @@ function LiveCard({ state, update, online }: CardProps & { online: boolean }) {
 /* ---------------------------------------------------------- winners */
 function WinnersCard({ state, update }: CardProps) {
   const undo = (id: string, name: string) => {
-    if (!confirm(`Remove ${name} from the winners? They go back into the draw (if they're not excluded).`)) return;
-    update((s) => ({ ...s, winners: s.winners.filter((w) => w.id !== id) }));
+    if (!confirm(`Undo ${name}'s win? They go back into the draw (if they're not excluded) and that prize can be drawn again.`)) return;
+    update((s) => {
+      const w = s.winners.find((x) => x.id === id);
+      const reopen = w && !w.forfeited && s.settings.prizes.includes(w.prize);
+      return {
+        ...s,
+        winners: s.winners.filter((x) => x.id !== id),
+        settings: { ...s.settings, currentPrize: reopen ? w.prize : s.settings.currentPrize },
+      };
+    });
   };
   /** Winner isn't here to collect: keep the record (marked), keep them out of later draws, redraw the prize. */
   const forfeit = (id: string, name: string, prize: string) => {
@@ -475,7 +509,11 @@ function PrizesCard({ state, update }: CardProps) {
   const add = (e: FormEvent) => {
     e.preventDefault();
     const p = name.trim();
-    if (!p || state.settings.prizes.includes(p)) return;
+    if (!p) return;
+    if (state.settings.prizes.some((x) => x.toLowerCase() === p.toLowerCase())) {
+      alert(`There is already a prize called “${p}”. Raise its quantity instead.`);
+      return;
+    }
     update((s) => ({
       ...s,
       settings: { ...s.settings, prizes: [...s.settings.prizes, p], prizeQty: { ...s.settings.prizeQty, [p]: clampQty(qty) } },
@@ -490,29 +528,68 @@ function PrizesCard({ state, update }: CardProps) {
     });
   const setCount = (p: string, n: number) =>
     update((s) => ({ ...s, settings: { ...s.settings, prizeQty: { ...s.settings.prizeQty, [p]: clampQty(n) } } }));
-  const moveUp = (i: number) =>
+  const move = (i: number, d: -1 | 1) =>
     update((s) => {
       const prizes = [...s.settings.prizes];
-      [prizes[i - 1], prizes[i]] = [prizes[i], prizes[i - 1]];
+      const j = i + d;
+      if (j < 0 || j >= prizes.length) return s;
+      [prizes[i], prizes[j]] = [prizes[j], prizes[i]];
       return { ...s, settings: { ...s.settings, prizes } };
     });
+  /** Renames the prize everywhere: the list, its quantity, the next draw and the winners who won it. */
+  const rename = (p: string) => {
+    const n = prompt('Prize name', p)?.trim();
+    if (!n || n === p) return;
+    if (state.settings.prizes.some((x) => x !== p && x.toLowerCase() === n.toLowerCase())) {
+      alert(`There is already a prize called “${n}”.`);
+      return;
+    }
+    update((s) => {
+      const { [p]: q, ...rest } = s.settings.prizeQty;
+      return {
+        ...s,
+        settings: {
+          ...s.settings,
+          prizes: s.settings.prizes.map((x) => (x === p ? n : x)),
+          prizeQty: q === undefined ? rest : { ...rest, [n]: q },
+          currentPrize: s.settings.currentPrize === p ? n : s.settings.currentPrize,
+        },
+        winners: s.winners.map((w) => (w.prize === p ? { ...w, prize: n } : w)),
+      };
+    });
+  };
+  const totals = prizeTotals(state);
 
   return (
     <div className="card">
       <div className="card-head">
         <h2>🎁 Prizes</h2>
+        <span className="badge in">
+          {totals.total} winner{totals.total === 1 ? '' : 's'} in total
+        </span>
       </div>
       <p className="help">
-        Set how many of each prize there are. When the last one is drawn, the next prize in this order is selected automatically. The prize name
-        appears on the big screen above the reel and on the winner card.
+        Set how many of each prize there are. Prizes are drawn from top to bottom: when the last one is drawn, the next prize in this order is
+        selected automatically, and when every prize has its winners the draw stops. The prize name appears on the big screen above the reel and on
+        the winner card.
       </p>
       <ul className="prize-list">
         {state.settings.prizes.map((p, i) => {
           const left = prizeLeft(state, p);
           return (
             <li key={p}>
-              <button className="icon-btn" style={{ width: 28, height: 28 }} disabled={i === 0} onClick={() => moveUp(i)} aria-label={`Move ${p} up`} title="Move up">
+              <button className="icon-btn" style={{ width: 28, height: 28 }} disabled={i === 0} onClick={() => move(i, -1)} aria-label={`Move ${p} up`} title="Move up">
                 ↑
+              </button>
+              <button
+                className="icon-btn"
+                style={{ width: 28, height: 28 }}
+                disabled={i === state.settings.prizes.length - 1}
+                onClick={() => move(i, 1)}
+                aria-label={`Move ${p} down`}
+                title="Move down"
+              >
+                ↓
               </button>
               <span className="prize-name">{p}</span>
               <span className={`badge ${left <= 0 ? 'win' : 'in'}`}>{left <= 0 ? 'All drawn' : `${left} left`}</span>
@@ -526,6 +603,9 @@ function PrizesCard({ state, update }: CardProps) {
                 aria-label={`How many ${p}`}
                 title="How many of this prize"
               />
+              <button className="icon-btn" style={{ width: 28, height: 28 }} aria-label={`Rename ${p}`} title="Rename" onClick={() => rename(p)}>
+                ✎
+              </button>
               <button className="icon-btn" style={{ width: 28, height: 28 }} aria-label={`Remove ${p}`} title="Remove" onClick={() => remove(p)}>
                 ×
               </button>
@@ -533,6 +613,11 @@ function PrizesCard({ state, update }: CardProps) {
           );
         })}
       </ul>
+      {!state.settings.prizes.length && (
+        <p className="note" style={{ marginTop: 0 }}>
+          No prizes yet — draws use “{state.settings.currentPrize}” with no limit until you add one.
+        </p>
+      )}
       <form className="row" onSubmit={add}>
         <input className="input" style={{ flex: 1, width: 'auto' }} placeholder="e.g. Smart TV, Gift voucher" value={name} onChange={(e) => setName(e.target.value)} />
         <input className="input qty" type="number" min={1} max={999} value={qty} onChange={(e) => setQty(Number(e.target.value))} aria-label="How many" title="How many" />
@@ -568,6 +653,138 @@ async function logoToDataUrl(file: File): Promise<string> {
     URL.revokeObjectURL(url);
   }
 }
+
+/* ------------------------------------------------------ LED / screen */
+const PRESETS: { label: string; w: number; h: number }[] = [
+  { label: 'Full HD', w: 1920, h: 1080 },
+  { label: '4K', w: 3840, h: 2160 },
+  { label: 'HD', w: 1280, h: 720 },
+  { label: 'Ultra-wide', w: 2560, h: 1080 },
+  { label: 'Wide strip', w: 1920, h: 480 },
+  { label: 'Square', w: 1080, h: 1080 },
+  { label: 'Portrait', w: 1080, h: 1920 },
+];
+
+function ScreenCard({ state, update, win }: CardProps & { win?: WinInfo }) {
+  const sc = state.settings.screen;
+  const set = (patch: Partial<ScreenSettings>) =>
+    update((s) => ({ ...s, settings: { ...s.settings, screen: { ...s.settings.screen, ...patch } } }));
+  const num = (v: string, min: number) => Math.max(min, Math.round(Number(v) || 0));
+  const pct = Math.round(sc.scale * 100);
+
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>🖥️ LED wall / screen</h2>
+        {win && (
+          <span className="badge in" title="Size of the live display window, in device pixels">
+            Display window {win.w}×{win.h}
+            {win.dpr !== 1 ? ` · ${Math.round(win.dpr * 100)}%` : ''}
+          </span>
+        )}
+      </div>
+      <p className="help">Match the live display to your LED wall. Changes apply instantly on the display.</p>
+
+      <div className="seg" role="group" aria-label="Screen mode" style={{ marginBottom: 6 }}>
+        <button className={sc.mode === 'fit' ? 'active' : ''} onClick={() => set({ mode: 'fit' })}>
+          Fit window
+        </button>
+        <button className={sc.mode === 'custom' ? 'active' : ''} onClick={() => set({ mode: 'custom' })}>
+          Custom size &amp; position
+        </button>
+      </div>
+      <p className="note" style={{ margin: '4px 0 0' }}>
+        {sc.mode === 'fit'
+          ? 'Fills the whole display window. Best when the LED wall is its own monitor in Windows.'
+          : 'Draws the show in an exact pixel area — for LED processors that take one region of the output (e.g. 1920×480 at the top-left). Everything outside stays black.'}
+      </p>
+
+      {sc.mode === 'custom' && (
+        <>
+          <div className="sub-label">Size presets</div>
+          <div className="chips">
+            {PRESETS.map((p) => (
+              <button key={p.label} className={`chip${sc.width === p.w && sc.height === p.h ? ' active' : ''}`} onClick={() => set({ width: p.w, height: p.h })}>
+                {p.label} <small>{p.w}×{p.h}</small>
+              </button>
+            ))}
+            {win && (
+              <button className="chip" onClick={() => set({ width: win.w, height: win.h, x: 0, y: 0 })}>
+                Use display window <small>{win.w}×{win.h}</small>
+              </button>
+            )}
+          </div>
+
+          <div className="sub-label">Exact pixels</div>
+          <div className="num-grid">
+            <label className="field">
+              Width
+              <input className="input" type="number" min={100} value={sc.width} onChange={(e) => set({ width: num(e.target.value, 100) })} />
+            </label>
+            <label className="field">
+              Height
+              <input className="input" type="number" min={100} value={sc.height} onChange={(e) => set({ height: num(e.target.value, 100) })} />
+            </label>
+            <label className="field">
+              Left (X)
+              <input className="input" type="number" value={sc.x} onChange={(e) => set({ x: Math.round(Number(e.target.value) || 0) })} />
+            </label>
+            <label className="field">
+              Top (Y)
+              <input className="input" type="number" value={sc.y} onChange={(e) => set({ y: Math.round(Number(e.target.value) || 0) })} />
+            </label>
+          </div>
+          <div className="row" style={{ marginTop: 10 }}>
+            <button className="btn sm" onClick={() => set({ x: 0, y: 0 })}>
+              Top-left
+            </button>
+            {win && (
+              <button className="btn sm" onClick={() => set({ x: Math.round((win.w - sc.width) / 2), y: Math.round((win.h - sc.height) / 2) })}>
+                Centre in window
+              </button>
+            )}
+            <span className="note">On the display: arrow keys nudge 1 px, Shift+arrows 10 px.</span>
+          </div>
+        </>
+      )}
+
+      <div className="sub-label">Content zoom</div>
+      <div className="row" style={{ flexWrap: 'nowrap' }}>
+        <button className="btn sm" onClick={() => set({ scale: Math.max(0.25, Math.round((sc.scale - 0.05) * 100) / 100) })} aria-label="Zoom out">
+          −
+        </button>
+        <input type="range" min={25} max={300} step={5} value={pct} onChange={(e) => set({ scale: Number(e.target.value) / 100 })} aria-label="Content zoom" />
+        <button className="btn sm" onClick={() => set({ scale: Math.min(4, Math.round((sc.scale + 0.05) * 100) / 100) })} aria-label="Zoom in">
+          +
+        </button>
+        <span className="badge in" style={{ minWidth: 52, textAlign: 'center' }}>
+          {pct}%
+        </span>
+      </div>
+      <p className="note" style={{ margin: '6px 0 0' }}>
+        Bigger text for a far-away audience, smaller to fit more. On the display: <kbd>+</kbd> <kbd>−</kbd> <kbd>0</kbd>.
+      </p>
+
+      <div className="sub-label">Rotation</div>
+      <div className="seg" role="group" aria-label="Rotation">
+        {([0, 90, 180, 270] as const).map((r) => (
+          <button key={r} className={sc.rotate === r ? 'active' : ''} onClick={() => set({ rotate: r })}>
+            {r}°
+          </button>
+        ))}
+      </div>
+      <p className="note" style={{ margin: '6px 0 0' }}>For walls mounted sideways or upside down when the PC output can&apos;t be rotated.</p>
+
+      <div style={{ marginTop: 8 }}>
+        <Setting title="Alignment guides" desc="Corner marks, centre cross and pixel size on the display (key G)" checked={sc.guides} onChange={(v) => set({ guides: v })} />
+      </div>
+      <button className="btn sm" style={{ marginTop: 6 }} onClick={() => set(defaultScreen())}>
+        <IconUndo /> Reset screen layout
+      </button>
+    </div>
+  );
+}
+
 
 /* --------------------------------------------------------- settings */
 function SettingsCard({ state, update }: CardProps) {
@@ -728,7 +945,7 @@ function BackupCard({ state, update }: CardProps) {
       const data = JSON.parse(await f.text()) as RaffleState;
       if (!Array.isArray(data.participants) || !data.settings) throw new Error();
       if (!confirm(`Restore backup with ${data.participants.length} participants and ${data.winners?.length ?? 0} winners? This replaces everything here.`)) return;
-      update(() => ({ ...defaultState(), ...data, settings: { ...defaultState().settings, ...data.settings }, winners: data.winners ?? [] }));
+      update(() => migrate(data));
     } catch {
       alert('That file is not a valid raffle backup.');
     } finally {

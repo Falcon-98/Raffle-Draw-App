@@ -6,7 +6,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Background, BrandBlock } from '@/components/Brand';
 import Bubbles from '@/components/Bubbles';
 import Reel, { buildReel } from '@/components/Reel';
-import { Countdown, WinnerName, celebrate, groupByPrize } from '@/components/Stage';
+import Screen from '@/components/Screen';
+import { Countdown, WinnerName, bindConfetti, celebrate, groupByPrize } from '@/components/Stage';
 import QrCode from '@/components/QrCode';
 import { type DrawShow, normalizeServer, useLivePublisher, viewerUrl } from '@/lib/live';
 import {
@@ -23,6 +24,8 @@ import {
 import {
   type DisplayPhase,
   type RaffleState,
+  type ScreenSettings,
+  type WinInfo,
   type Winner,
   activeWinners,
   canDrawPrize,
@@ -31,6 +34,7 @@ import {
   nextPrize,
   prizeLeft,
   prizeQty,
+  prizeTotals,
   sendCommand,
   uid,
   useCommands,
@@ -73,6 +77,12 @@ export default function DisplayPage() {
     setToast(msg);
     setTimeout(() => setToast(''), 3200);
   }, []);
+
+  const setScreen = useCallback(
+    (fn: (sc: ScreenSettings) => Partial<ScreenSettings>) =>
+      update((st) => ({ ...st, settings: { ...st.settings, screen: { ...st.settings.screen, ...fn(st.settings.screen) } } })),
+    [update],
+  );
 
   /* ---------------------------------------------------------- the draw */
   const startDraw = useCallback(async (requestId: string = uid()) => {
@@ -127,7 +137,9 @@ export default function DisplayPage() {
           ? 'No participants yet — add names in the admin panel.'
           : !p.length
             ? 'Everyone has already won or is excluded.'
-            : `All “${s.settings.currentPrize}” prizes have been drawn. Pick another prize in the admin panel.`,
+            : prizeTotals(s).left === 0
+              ? `All ${prizeTotals(s).total} prizes have been drawn. 🎉`
+              : `All “${s.settings.currentPrize}” prizes have been drawn. Pick another prize in the admin panel.`,
       );
       return;
     }
@@ -181,11 +193,11 @@ export default function DisplayPage() {
     else if (cmd.type === 'reset-view') resetView();
     else if (cmd.type === 'confetti') celebrate();
     else if (cmd.type === 'showcase') toggleShowcase(true);
-    else if (cmd.type === 'ping') sendCommand({ type: 'status', phase: phaseRef.current, at: Date.now() });
+    else if (cmd.type === 'ping') sendCommand({ type: 'status', phase: phaseRef.current, at: Date.now(), win: winInfo() });
   });
 
   useEffect(() => {
-    const beat = () => sendCommand({ type: 'status', phase, at: Date.now() });
+    const beat = () => sendCommand({ type: 'status', phase, at: Date.now(), win: winInfo() });
     beat();
     const t = setInterval(beat, 1500);
     return () => clearInterval(t);
@@ -206,10 +218,23 @@ export default function DisplayPage() {
       else if (e.key.toLowerCase() === 'w') toggleShowcase();
       else if (e.key.toLowerCase() === 'm') update((st) => ({ ...st, settings: { ...st.settings, sound: !st.settings.sound } }));
       else if (e.key === '?' || e.key.toLowerCase() === 'h') setHelp((v) => !v);
+      else if (e.key.toLowerCase() === 'g') setScreen((sc) => ({ guides: !sc.guides }));
+      else if (e.key === '+' || e.key === '=') setScreen((sc) => ({ scale: round2(Math.min(4, sc.scale + 0.05)) }));
+      else if (e.key === '-' || e.key === '_') setScreen((sc) => ({ scale: round2(Math.max(0.25, sc.scale - 0.05)) }));
+      else if (e.key === '0') setScreen(() => ({ scale: 1 }));
+      else if (e.key.startsWith('Arrow')) {
+        // Nudge the canvas position (custom size only): 1 px, or 10 px with Shift
+        if (loadState().settings.screen.mode !== 'custom') return;
+        e.preventDefault();
+        const d = e.shiftKey ? 10 : 1;
+        const dx = e.key === 'ArrowLeft' ? -d : e.key === 'ArrowRight' ? d : 0;
+        const dy = e.key === 'ArrowUp' ? -d : e.key === 'ArrowDown' ? d : 0;
+        setScreen((sc) => ({ x: sc.x + dx, y: sc.y + dy }));
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [startDraw, resetView, toggleShowcase, update]);
+  }, [startDraw, resetView, toggleShowcase, update, setScreen]);
 
   // Audio needs one interaction with this window.
   useEffect(() => {
@@ -268,11 +293,14 @@ export default function DisplayPage() {
   const listed = settings.prizes.includes(settings.currentPrize);
   const qty = listed ? prizeQty(state, settings.currentPrize) : 1;
   const left = listed ? prizeLeft(state, settings.currentPrize) : 1;
+  const prizes = prizeTotals(state);
+  const finished = prizes.total > 0 && prizes.left === 0;
 
   return (
+    <Screen cfg={settings.screen}>
     <main className="stage">
       <Background />
-      {settings.showBubbles && names.length > 0 && <Bubbles names={names} visible={phase === 'idle'} />}
+      {settings.showBubbles && names.length > 0 && !finished && <Bubbles names={names} visible={phase === 'idle'} />}
 
       <header className="topbar">
         <BrandBlock eventTitle={settings.eventTitle} company={settings.companyName} logo={settings.logo} display={settings.companyDisplay} />
@@ -301,20 +329,47 @@ export default function DisplayPage() {
                 className="hero"
                 initial={{ opacity: 0, y: 30, scale: 0.97 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -20, scale: 0.97 }}
-                transition={{ duration: 0.5, ease: [0.2, 0.8, 0.2, 1] }}
+                exit={{ opacity: 0, y: -20, scale: 0.97, transition: { duration: 0.3 } }}
+                transition={{ duration: 0.45, ease: [0.2, 0.8, 0.2, 1] }}
               >
-                <span className="kicker">{prizeOk ? 'Now drawing' : 'Draw complete'}</span>
-                <span className="prize-pill">
-                  <IconGift /> {settings.currentPrize}
-                  {qty > 1 && prizeOk && <span className="prize-left">{left} of {qty} left</span>}
-                </span>
+                {finished ? (
+                  <>
+                    <span className="kicker">The draw is complete</span>
+                    <span className="prize-pill">
+                      <IconTrophy /> All {prizes.total} prizes drawn
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="kicker">{prizeOk ? 'Now drawing' : 'Draw complete'}</span>
+                    <span className="prize-pill">
+                      <IconGift /> {settings.currentPrize}
+                      {qty > 1 && prizeOk && <span className="prize-left">{left} of {qty} left</span>}
+                    </span>
+                    {prizes.total > 1 && prizeOk && listed && (
+                      <span className="prize-count">
+                        Prize {prizes.drawn + 1} of {prizes.total}
+                      </span>
+                    )}
+                  </>
+                )}
                 <h1 className="title">
                   <span className="grad-text">{settings.eventTitle}</span>
                 </h1>
-                <p className="subtitle">{settings.eventSubtitle}</p>
+                <p className="subtitle">{finished ? 'Thank you for joining us — congratulations to all our winners!' : settings.eventSubtitle}</p>
 
-                {total === 0 ? (
+                {finished ? (
+                  <div className="finale-list">
+                    {activeWinners(state)
+                      .sort((a, b) => a.drawNo - b.drawNo)
+                      .slice(-12)
+                      .map((w) => (
+                        <span key={w.id} className="meta-chip">
+                          🏆 {w.name} <span className="note">· {w.prize}</span>
+                        </span>
+                      ))}
+                  </div>
+                ) : total === 0 ? (
                   <div className="empty-card">Waiting for participants… The draw opens as soon as names are added in the admin panel.</div>
                 ) : (
                   <>
@@ -328,10 +383,15 @@ export default function DisplayPage() {
                         <span>In the draw</span>
                       </div>
                       <div className="stat">
-                        <b>{activeWinners(state).length}</b>
-                        <span>Winners</span>
+                        <b>{prizes.total ? prizes.left : activeWinners(state).length}</b>
+                        <span>{prizes.total ? 'Prizes left' : 'Winners'}</span>
                       </div>
                     </div>
+                    {prizes.total > 0 && (
+                      <div className="progress" aria-label={`${prizes.drawn} of ${prizes.total} prizes drawn`}>
+                        <span style={{ width: `${(prizes.drawn / prizes.total) * 100}%` }} />
+                      </div>
+                    )}
                     <button
                       className="draw-btn"
                       disabled={!pool.length || !prizeOk}
@@ -441,7 +501,7 @@ export default function DisplayPage() {
                 className="winner-card"
                 initial={{ opacity: 0, scale: 0.6, rotateX: 25 }}
                 animate={{ opacity: 1, scale: 1, rotateX: 0 }}
-                exit={{ opacity: 0, scale: 0.9 }}
+                exit={{ opacity: 0, scale: 0.92, transition: { duration: 0.25, ease: 'easeIn' } }}
                 transition={{ type: 'spring', stiffness: 160, damping: 16 }}
               >
                 <div className="rays" />
@@ -505,7 +565,7 @@ export default function DisplayPage() {
         <span title="A fingerprint of the current eligible list. It only changes if someone is added or removed.">
           <IconFinger /> Pool fingerprint <code>{fp || '····-····-····'}</code>
         </span>
-        <span className="hide-sm">
+        <span className="hide-sm opt">
           <IconShield /> Each result is locked before the reel spins
         </span>
       </footer>
@@ -540,21 +600,42 @@ export default function DisplayPage() {
               <dt><kbd>F</kbd></dt><dd>Full screen</dd>
               <dt><kbd>W</kbd></dt><dd>Show all winners</dd>
               <dt><kbd>M</kbd></dt><dd>Sound {settings.sound ? 'off' : 'on'}</dd>
+              <dt><kbd>G</kbd></dt><dd>LED alignment guides</dd>
+              <dt><kbd>+</kbd> <kbd>−</kbd> <kbd>0</kbd></dt><dd>Zoom in / out / reset</dd>
+              {settings.screen.mode === 'custom' && (
+                <>
+                  <dt><kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd></dt><dd>Move the canvas 1 px (Shift: 10 px)</dd>
+                </>
+              )}
               <dt><kbd>?</kbd></dt><dd>Show / hide this list</dd>
             </dl>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {toast && (
-          <motion.div className="toast" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}>
-            {toast}
-          </motion.div>
-        )}
-      </AnimatePresence>
     </main>
+
+      <canvas ref={bindConfetti} className="confetti-canvas" aria-hidden />
+
+      <div className="toast-wrap">
+        <AnimatePresence>
+          {toast && (
+            <motion.div className="toast" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}>
+              {toast}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </Screen>
   );
+}
+
+const round2 = (v: number) => Math.round(v * 100) / 100;
+
+/** The display window's size in device pixels — the admin offers it as an LED canvas preset. */
+function winInfo(): WinInfo {
+  const dpr = window.devicePixelRatio || 1;
+  return { w: Math.round(window.innerWidth * dpr), h: Math.round(window.innerHeight * dpr), dpr };
 }
 
 function IconUsersSmall() {
