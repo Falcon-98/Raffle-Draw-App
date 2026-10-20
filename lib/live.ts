@@ -17,6 +17,7 @@ import {
   eligible,
   prizeLeft,
   prizeQty,
+  prizeTotals,
 } from './store';
 
 /* --------------------------------------------------------------- types */
@@ -55,7 +56,7 @@ export type LiveSnapshot = {
   v: 1;
   live: true;
   brand: { company: string; logo?: string; display: CompanyDisplay; eventTitle: string; eventSubtitle: string; nameColors: string[] };
-  prize: { current: string; left: number; qty: number; ok: boolean };
+  prize: { current: string; left: number; qty: number; ok: boolean; totals?: { total: number; drawn: number; left: number } };
   prizes: string[];
   counts: { entries: number; eligible: number; winners: number };
   fingerprint: string;
@@ -111,6 +112,7 @@ export function buildSnapshot(
       left: listed ? prizeLeft(s, st.currentPrize) : 1,
       qty: listed ? prizeQty(s, st.currentPrize) : 1,
       ok: canDrawPrize(s),
+      totals: prizeTotals(s),
     },
     prizes: st.prizes,
     counts: { entries: s.participants.length, eligible: pool.length, winners: won.length },
@@ -192,7 +194,8 @@ export function viewerUrl(server: string, code: string) {
   const here = typeof window === 'undefined' ? '' : window.location.origin;
   const u = `${here}${asset('/live/')}?r=${code}`;
   const s = normalizeServer(server);
-  return s && s !== here && s !== normalizeServer(DEFAULT_LIVE_SERVER) ? `${u}&s=${encodeURIComponent(s)}` : u;
+  // Only the default server can be left out: the viewer falls back to it, not to its own origin.
+  return s && s !== normalizeServer(DEFAULT_LIVE_SERVER) ? `${u}&s=${encodeURIComponent(s)}` : u;
 }
 
 /* ---------------------------------------------------------- publisher */

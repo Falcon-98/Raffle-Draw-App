@@ -29,7 +29,8 @@ export const ADMIN_PIN = process.env.NEXT_PUBLIC_ADMIN_PIN || 'click2026';
 export const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || '';
 export const asset = (p: string) => `${BASE_PATH}${p.startsWith('/') ? p : `/${p}`}`;
 
-export const DEFAULT_PRIZES = ['Grand Prize', '1st Prize', '2nd Prize', '3rd Prize', 'Special Gift'];
+/** Prizes are drawn top to bottom, so the grand prize goes last for suspense. */
+export const DEFAULT_PRIZES = ['Special Gift', '3rd Prize', '2nd Prize', '1st Prize', 'Grand Prize'];
 
 /** Colour presets for the winner's name (left → right gradient). */
 export const NAME_COLOR_PRESETS: { name: string; colors: string[] }[] = [

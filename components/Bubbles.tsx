@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 /** Deterministic PRNG so a bubble keeps its place between renders. */
 function mulberry32(seed: number) {
@@ -34,19 +34,26 @@ type Bubble = {
  */
 export default function Bubbles({ names, visible }: { names: string[]; visible: boolean }) {
   const [max, setMax] = useState(40);
-  const [vp, setVp] = useState('');
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  const ref = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState(0);
   const [lit, setLit] = useState(-1);
 
+  // Size from our own box (not the window) so it follows the LED canvas.
   useEffect(() => {
-    const fit = () => {
-      const w = window.innerWidth;
-      setMax(w < 640 ? 14 : w < 1100 ? 28 : 42);
-      setVp(`${w}x${window.innerHeight}`);
+    const el = ref.current;
+    if (!el) return;
+    const read = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      setBox((b) => (b.w === w && b.h === h ? b : { w, h }));
+      const area = (w * h) / 1e6; // megapixels of layout space
+      setMax(Math.max(10, Math.min(90, Math.round(w < 640 ? 14 : 22 + area * 18))));
     };
-    fit();
-    window.addEventListener('resize', fit);
-    return () => window.removeEventListener('resize', fit);
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
   // Shuffle once per list so pages are mixed, not alphabetical.
@@ -74,14 +81,15 @@ export default function Bubbles({ names, visible }: { names: string[]; visible: 
 
   const bubbles = useMemo<Bubble[]>(() => {
     const slice = shuffled.slice(page * max, page * max + max);
-    if (!slice.length || typeof window === 'undefined') return [];
-    const W = window.innerWidth;
-    const H = Math.max(200, window.innerHeight - 140);
+    if (!slice.length || !box.w) return [];
+    const W = box.w;
+    const H = Math.max(120, box.h);
     const small = W < 640;
     const r = mulberry32(page * 101 + slice.length);
     // Keep the centre (title + button) clear; elliptical zone in %.
-    const clearX = small ? 70 : 27;
-    const clearY = small ? 30 : 36;
+    const short = H < 520; // LED strips: keep bubbles to the sides
+    const clearX = small ? 70 : short ? 24 : 27;
+    const clearY = small ? 30 : short ? 70 : 36;
     const placed: { x: number; y: number; w: number; h: number }[] = [];
     const out: Bubble[] = [];
 
@@ -114,7 +122,7 @@ export default function Bubbles({ names, visible }: { names: string[]; visible: 
       }
     });
     return out;
-  }, [shuffled, page, max, vp]);
+  }, [shuffled, page, max, box]);
 
   // Randomly spotlight one bubble at a time.
   useEffect(() => {
@@ -124,7 +132,7 @@ export default function Bubbles({ names, visible }: { names: string[]; visible: 
   }, [bubbles.length, visible]);
 
   return (
-    <div className={`bubbles${visible ? '' : ' hidden'}`} aria-hidden>
+    <div ref={ref} className={`bubbles${visible ? '' : ' hidden'}`} aria-hidden>
       <div className="bubble-page" key={`${page}-${max}-${shuffled.length}`}>
         {bubbles.map((b, i) => (
           <div

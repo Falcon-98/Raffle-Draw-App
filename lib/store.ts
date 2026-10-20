@@ -53,7 +53,23 @@ export type Settings = {
   nameColors: string[];
   /** Online live view (server/live-server.mjs). The room key only lives on this computer. */
   live: LiveSettings;
+  /** Size, position, zoom and rotation of the display canvas (LED walls). */
+  screen: ScreenSettings;
 };
+
+export type ScreenSettings = {
+  mode: 'fit' | 'custom';
+  width: number; // device pixels (as the LED processor / Windows display settings show them)
+  height: number;
+  x: number;
+  y: number;
+  scale: number; // content zoom, 1 = 100%
+  rotate: 0 | 90 | 180 | 270;
+  guides: boolean;
+};
+
+/** Size of the display window in device pixels (sent to the admin for the LED presets). */
+export type WinInfo = { w: number; h: number; dpr: number };
 
 export type LiveSettings = {
   server: string; // live server address, e.g. https://abc.trycloudflare.com
@@ -78,13 +94,24 @@ export type Command =
   | { type: 'reset-view' }
   | { type: 'confetti' }
   | { type: 'showcase' }
-  | { type: 'status'; phase: DisplayPhase; at: number }
+  | { type: 'status'; phase: DisplayPhase; at: number; win?: WinInfo }
   | { type: 'ping' };
 
 /* --------------------------------------------------------------- defaults */
 
 const KEY = 'click2026:raffle:v1';
 const CHANNEL = 'click2026:raffle';
+
+export const defaultScreen = (): ScreenSettings => ({
+  mode: 'fit',
+  width: 1920,
+  height: 1080,
+  x: 0,
+  y: 0,
+  scale: 1,
+  rotate: 0,
+  guides: false,
+});
 
 export const defaultState = (): RaffleState => ({
   participants: [],
@@ -106,6 +133,7 @@ export const defaultState = (): RaffleState => ({
     companyDisplay: 'name',
     nameColors: NAME_COLOR_PRESETS[0].colors,
     live: { server: DEFAULT_LIVE_SERVER, showQr: false },
+    screen: defaultScreen(),
   },
   updatedAt: Date.now(),
 });
@@ -117,21 +145,51 @@ export function loadState(): RaffleState {
   try {
     const raw = window.localStorage.getItem(KEY);
     if (!raw) return defaultState();
-    const parsed = JSON.parse(raw) as Partial<RaffleState>;
-    const d = defaultState();
-    return {
-      participants: Array.isArray(parsed.participants) ? parsed.participants : [],
-      winners: Array.isArray(parsed.winners) ? parsed.winners : [],
-      settings: {
-        ...d.settings,
-        ...(parsed.settings ?? {}),
-        live: { ...d.settings.live, ...(parsed.settings?.live ?? {}), server: parsed.settings?.live?.server || d.settings.live.server },
-      },
-      updatedAt: parsed.updatedAt ?? Date.now(),
-    };
+    return migrate(JSON.parse(raw));
   } catch {
     return defaultState();
   }
+}
+
+/**
+ * Accepts any saved state or backup file and returns a valid state: fills in new settings,
+ * and also reads prizes saved as objects ({ id, name, qty } with currentPrizeId).
+ */
+export function migrate(parsed: Partial<RaffleState>): RaffleState {
+  const d = defaultState();
+  const raw = { ...(parsed.settings ?? {}) } as Partial<Settings> & Record<string, unknown>;
+  let prizes = d.settings.prizes;
+  let prizeQty = raw.prizeQty && typeof raw.prizeQty === 'object' ? { ...raw.prizeQty } : {};
+  let currentPrize = typeof raw.currentPrize === 'string' ? raw.currentPrize : '';
+  if (Array.isArray(raw.prizes)) {
+    const objs = (raw.prizes as unknown[]).map((p, i) =>
+      typeof p === 'string'
+        ? { id: '', name: p, qty: prizeQty[p] ?? 1 }
+        : {
+            id: String((p as { id?: unknown }).id ?? ''),
+            name: String((p as { name?: unknown }).name ?? `Prize ${i + 1}`),
+            qty: Math.max(1, Math.floor(Number((p as { qty?: unknown }).qty) || 1)),
+          },
+    );
+    prizes = [...new Set(objs.map((p) => p.name))];
+    prizeQty = Object.fromEntries(objs.map((p) => [p.name, p.qty]));
+    if (!currentPrize && typeof raw.currentPrizeId === 'string') currentPrize = objs.find((p) => p.id === raw.currentPrizeId)?.name ?? '';
+  }
+  delete raw.currentPrizeId;
+  return {
+    participants: Array.isArray(parsed.participants) ? parsed.participants : [],
+    winners: Array.isArray(parsed.winners) ? parsed.winners : [],
+    settings: {
+      ...d.settings,
+      ...raw,
+      prizes,
+      prizeQty,
+      currentPrize: currentPrize || prizes[0] || d.settings.currentPrize,
+      live: { ...d.settings.live, ...(raw.live ?? {}), server: raw.live?.server || d.settings.live.server },
+      screen: { ...defaultScreen(), ...(raw.screen ?? {}) },
+    },
+    updatedAt: parsed.updatedAt ?? Date.now(),
+  };
 }
 
 let channel: BroadcastChannel | null = null;
@@ -208,6 +266,17 @@ export const prizeQty = (s: RaffleState, prize: string) => Math.max(1, s.setting
 /** How many of a prize are still to be drawn. */
 export function prizeLeft(s: RaffleState, prize: string) {
   return prizeQty(s, prize) - s.winners.filter((w) => !w.forfeited && w.prize === prize).length;
+}
+
+/** All listed prizes together: how many winners in total, drawn so far and still to draw. */
+export function prizeTotals(s: RaffleState) {
+  let total = 0;
+  let left = 0;
+  for (const p of s.settings.prizes) {
+    total += prizeQty(s, p);
+    left += Math.max(0, prizeLeft(s, p));
+  }
+  return { total, left, drawn: total - left };
 }
 
 /** The prize to draw after `prize` ran out: the next one in the list (wrapping) that has some left. */

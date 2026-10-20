@@ -9,7 +9,34 @@ import { tick } from '@/lib/sound';
 
 const COLORS = ['#ff3d8b', '#8b5cf6', '#22d3ee', '#ffc542', '#34d399', '#ffffff'];
 
+type Fire = (opts: confetti.Options) => void;
+const fullPage: Fire = (opts) => void confetti(opts);
+let fire: Fire = fullPage;
+
+/**
+ * Ref for a <canvas className="confetti-canvas"> inside the display canvas, so confetti stays on
+ * the LED area (also when it is zoomed or rotated). Without one, confetti covers the whole page.
+ */
+export function bindConfetti(canvas: HTMLCanvasElement | null) {
+  if (!canvas) {
+    fire = fullPage;
+    return;
+  }
+  const inst = confetti.create(canvas, { resize: false });
+  fire = (opts) => {
+    // Size from layout (not the transformed on-screen box) so rotation/zoom don't distort it.
+    const w = canvas.offsetWidth;
+    const h = canvas.offsetHeight;
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    void inst(opts);
+  };
+}
+
 export function celebrate() {
+  const confetti = fire;
   const end = Date.now() + 2600;
   confetti({ particleCount: 160, spread: 100, startVelocity: 55, origin: { y: 0.55 }, colors: COLORS, zIndex: 60 });
   (function frame() {
@@ -34,7 +61,7 @@ export function WinnerName({ name, colors }: { name: string; colors?: string[] }
     <h2
       className="winner-name"
       aria-label={name}
-      style={{ fontSize: `clamp(34px, ${vw.toFixed(2)}vw, 104px)`, '--name-grad': nameGradient(colors) } as React.CSSProperties}
+      style={{ fontSize: `clamp(30px, min(${vw.toFixed(2)}cqw, 13cqh), 180px)`, '--name-grad': nameGradient(colors) } as React.CSSProperties}
     >
       {name.split(' ').map((word, wi, words) => (
         <span key={wi} className="word">

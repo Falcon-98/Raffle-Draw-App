@@ -16,7 +16,9 @@ Everything runs in the browser. There is no server and no database, so nothing t
 - **Not present → redraw** — mark a winner as absent; they stay in the record, can't win again, and the prize goes back up for a redraw
 - **Winners showcase** — a full-screen "Our winners" slide grouped by prize for the finale
 - Winners board in draw order (1, 2, 3 …), each new winner added at the bottom and scrolled into view; live entry counts, undo, one-prize-per-person
-- Keyboard control on the display: <kbd>Space</kbd> draw · <kbd>Esc</kbd> back · <kbd>F</kbd> full screen · <kbd>W</kbd> winners · <kbd>M</kbd> sound · <kbd>?</kbd> help
+- **LED wall / screen setup** — exact canvas size and position in pixels, content zoom, rotation and alignment guides; the layout adapts to wide, short LED strips
+- **Draw progress** — "Prize 2 of 6" and a progress bar on the screen; when every prize has its winners the draw stops and the screen thanks everyone with the winners list
+- Keyboard control on the display: <kbd>Space</kbd> draw · <kbd>Esc</kbd> back · <kbd>F</kbd> full screen · <kbd>W</kbd> winners · <kbd>M</kbd> sound · <kbd>G</kbd> guides · <kbd>+</kbd> <kbd>−</kbd> <kbd>0</kbd> zoom · <kbd>?</kbd> help
 
 **Participants**
 - Excel (.xlsx) / CSV upload with header detection, copy-paste from Excel, or typing; duplicate detection and a preview before anything is added
@@ -95,14 +97,30 @@ Settings go in a `.env` file: `cp .env.example .env` and fill in what you need (
 2. Open the **admin** page in Chrome or Edge on the laptop screen and unlock it with the PIN.
 3. Click **Open live display**. Drag that new window to the projector and press **F** for full screen. The admin header turns green: **Display connected**.
 4. Click once anywhere on the display window so the browser allows sound.
-5. Set up the prizes (**Prizes** card: name, how many, order). Pick the prize chip, then press **Draw a winner**. On the display itself, **Space** also draws, **Esc** returns to the welcome screen and **?** lists all shortcuts.
+5. Set up the prizes (**Prizes** card: name, how many, order with ↑ ↓, rename with ✎). Prizes are drawn top to bottom — the defaults put the Grand Prize last. **Undo** a win and that prize is selected again for a redraw. Pick the prize chip, then press **Draw a winner**. On the display itself, **Space** also draws, **Esc** returns to the welcome screen and **?** lists all shortcuts.
 6. **Winner not here?** In **Winners**, press **Not present** next to their name. They are kept in the record as *Not present* and can't be drawn again, and the same prize is selected so you can draw again straight away.
-7. When a prize runs out the next one is selected automatically (turn off *Next prize automatically* in *Display settings* to choose yourself). When everything has been drawn the display shows **All prizes drawn**.
+7. When a prize runs out the next one is selected automatically (turn off *Next prize automatically* in *Display settings* to choose yourself). When everything has been drawn the draw stops: the admin button reads *All N prizes drawn*, Space on the display is refused, and the display shows a "draw complete" screen with the winners. To draw more, add a prize or raise a quantity.
 8. For the finale press **Show all winners** (or **W** on the display) for a full-screen list of every winner, grouped by prize.
 
 > **Both windows must be in the same browser on the same computer.** They talk to each other through the browser (BroadcastChannel + localStorage), which is why no server is needed. A phone opening the public site sees its own, empty copy — that is expected. To let people watch on their phones, use the **online live view** (section 8): they open a special link instead.
 
 Data is saved automatically in the browser. Use **Backup & reset → Export backup** before the event, and keep the file. To move the draw to another laptop, restore that file there.
+
+### LED wall / screen setup
+
+Admin → **LED wall / screen**. Everything applies live on the display.
+
+| Setting | Use it when |
+|---|---|
+| **Fit window** | The LED wall is its own monitor in Windows. Drag the display window there and press **F**. |
+| **Custom size & position** | The LED processor takes one region of the output — e.g. a 1920×480 strip from the top-left of a 1920×1080 output. Enter width, height and X/Y (in real pixels, as shown in the LED processor or Windows display settings). Everything outside stays black. Presets: Full HD, 4K, HD, ultra-wide, wide strip, square, portrait, or *Use display window*. |
+| **Content zoom** | Text too small for the back of the hall (zoom in) or too crowded (zoom out). |
+| **Rotation** | The wall is mounted sideways/upside down and the PC output can't be rotated. |
+| **Alignment guides** | Shows corner marks, a centre cross and the pixel size so the LED technician can line up the edges. Turn off before the show. |
+
+Keys on the display window: **F** full screen · **G** guides · **+ / − / 0** zoom · **arrow keys** nudge position 1 px (**Shift** = 10 px) in custom mode.
+
+The layout adapts to the canvas shape: on short strips the subtitle, stats and trophy hide and the reel shows 3 rows, so everything still fits. Confetti, the toast messages and the QR code stay inside the canvas.
 
 **No internet at the venue?** Open both the display and the admin page once while online (on the laptop you will use). The site is then stored in the browser and keeps working offline, including fonts. Chrome and Edge can also install it as an app (install icon in the address bar).
 
@@ -245,6 +263,7 @@ components/
   Brand.tsx, Icons.tsx
   ServiceWorker.tsx   Registers the offline service worker
   Stage.tsx           Countdown, winner name, confetti (shared by display and live view)
+  Screen.tsx          LED canvas: size, position, zoom, rotation, alignment guides
   QrCode.tsx          QR codes for the live view link
   admin/              Import panel, participant list, PIN gate, switches
 lib/
