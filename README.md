@@ -167,11 +167,13 @@ Click **Excel template** in the admin to download the ready-made file.
 | Winner name colours | Admin → *Display settings → Winner name colours*: presets (Aurora, Gold, Sunset, Ocean, Emerald, White) or three custom colours, with a live preview. More presets: `NAME_COLOR_PRESETS` in `lib/config.ts` |
 | Colours, fonts, animation | `app/globals.css` (tokens at the top) |
 | Title, subtitle, bubbles, countdown, auto next prize, sound, spin time, winners board | Admin → *Display settings* (live) |
+| Name bubbles | Admin → *Display settings → Name bubbles*: all names in the draw are split **evenly into sets** (default **4**; 177 names → 45 · 44 · 44 · 44) that take turns, so every name is shown once a round. Set the number of sets and how long each stays on screen (default 9 s). Every name of a set is placed — bubbles shrink if a set is crowded — and none covers the logo, stats, button or winners board. |
+| Prize above the title | Admin → *Display settings → Prize on the welcome screen* (off by default): "Now drawing", the prize name and "Prize 1 of 3" on the welcome screen and the phone view. The prize always shows during the draw and on the winner card. |
 
 ## 7. Good to know
 
 - The admin PIN is a *soft* gate that keeps the audience out of the admin screen. A static site cannot hide data from someone determined; that is why only name, code and organization are kept from the uploaded sheet.
-- Large lists are fine: thousands of names import in a second; the bubbles show them in rotating groups; the reel samples from the pool.
+- Large lists are fine: thousands of names import in a second; the bubbles show them in evenly split sets (raise the number of sets for very long lists — the admin warns when a set gets crowded); the reel samples from the pool.
 - Fonts load from Google Fonts and are cached for offline use after the first visit. Without that visit and without internet, the page still works with system fonts. You can also run it locally with `npm run build && npm run preview`.
 - After a new deploy, the next online visit loads the new version automatically (pages are always fetched fresh when online).
 

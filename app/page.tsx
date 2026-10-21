@@ -302,7 +302,9 @@ export default function DisplayPage() {
     <Screen cfg={settings.screen}>
     <main className="stage">
       <Background />
-      {settings.showBubbles && names.length > 0 && !finished && <Bubbles names={names} visible={phase === 'idle'} />}
+      {settings.showBubbles && names.length > 0 && !finished && (
+        <Bubbles names={names} visible={phase === 'idle'} sets={settings.bubbleSets} seconds={settings.bubbleSeconds} />
+      )}
 
       <header className="topbar">
         <BrandBlock eventTitle={settings.eventTitle} company={settings.companyName} logo={settings.logo} display={settings.companyDisplay} />
@@ -341,7 +343,7 @@ export default function DisplayPage() {
                       <IconTrophy /> All {prizes.total} prizes drawn
                     </span>
                   </>
-                ) : (
+                ) : settings.showPrize ? (
                   <>
                     <span className="kicker">{prizeOk ? 'Now drawing' : 'Draw complete'}</span>
                     <span className="prize-pill">
@@ -354,7 +356,7 @@ export default function DisplayPage() {
                       </span>
                     )}
                   </>
-                )}
+                ) : null}
                 <EventTitle title={settings.eventTitle} logo={settings.eventLogo} show={settings.titleDisplay} />
                 <p className="subtitle">{finished ? 'Thank you for joining us — congratulations to all our winners!' : settings.eventSubtitle}</p>
 
