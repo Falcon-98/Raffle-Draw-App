@@ -480,7 +480,6 @@ function WinnersCard({ state, update }: CardProps) {
         <ol className="win-list">
           {byPrizeRank(state.winners, state.settings.prizes).map((w) => (
             <li key={w.id} className={w.forfeited ? 'forfeited' : ''}>
-              <span className="no">{w.drawNo}</span>
               <div className="who">
                 <span className="name">{w.name}</span>
                 {w.forfeited && <span className="badge out" style={{ marginLeft: 8 }}>Not present</span>}
