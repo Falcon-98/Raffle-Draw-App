@@ -172,11 +172,19 @@ export function normalizeServer(input: string) {
   return s;
 }
 
+/** AbortSignal.timeout, also on browsers without it (iPhones before iOS 16). */
+function timeoutSignal(ms: number) {
+  if (typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal) return AbortSignal.timeout(ms);
+  const c = new AbortController();
+  setTimeout(() => c.abort(), ms);
+  return c.signal;
+}
+
 async function call<T>(url: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
     // Never wait forever: a stuck request would hold up every later update from the big screen.
-    res = await fetch(url, { ...init, cache: 'no-store', signal: AbortSignal.timeout(10000) });
+    res = await fetch(url, { ...init, cache: 'no-store', signal: timeoutSignal(10000) });
   } catch {
     throw new Error('Cannot reach the live server. Check the address and that the server is running.');
   }

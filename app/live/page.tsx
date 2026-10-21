@@ -42,12 +42,25 @@ export default function LivePage() {
   const syncTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // Big-screen clock → this phone's clock (null until a message with timing arrives).
   const toLocal = useRef<((t: number) => number) | null>(null);
+  // Server → phone clock offsets seen recently. The smallest is the real offset: a message that
+  // arrives late (iPhone Safari hands over everything it received while the phone was locked or the
+  // app was in the background, all at once) has a bigger one and must not look brand new.
+  const offsets = useRef<{ at: number; v: number }[]>([]);
+  const catchUp = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // When the countdown / reel running on this phone should be over (phone clock).
+  const animEnd = useRef(0);
 
   /** Bring the local screen in line with the big screen (outside of a running animation). */
-  const follow = useCallback((s: LiveSnapshot) => {
+  const follow = useCallback((s: LiveSnapshot, quiet = false) => {
     const { phase: p, draw: d } = s.view;
-    const isFirst = first.current;
+    const isFirst = first.current || quiet;
     first.current = false;
+
+    // An animation that should have finished long ago (the phone was asleep) never holds the screen.
+    if (animating.current && Date.now() > animEnd.current + 1500) {
+      animating.current = false;
+      clearTimeout(syncTimer.current);
+    }
 
     // A draw is under way that this phone hasn't shown yet: join it at the same point as the big
     // screen (same names, same timing) — also after a refresh — instead of starting over.
@@ -75,9 +88,10 @@ export default function LivePage() {
         return;
       }
       animating.current = true;
+      animEnd.current = (at ?? now) + (mode === 'countdown' ? COUNTDOWN_MS : 0) + d.spinMs;
       setStartAt(at);
       setPhase(mode);
-      if (mode === 'spinning' && soundRef.current && (at === null || now - at < 500)) whoosh();
+      if (mode === 'spinning' && soundRef.current && !quiet && (at === null || now - at < 500)) whoosh();
       return;
     }
     // Same draw, still running here: line the reel up with the big screen's start time once known.
@@ -101,14 +115,34 @@ export default function LivePage() {
     }
   }, []);
 
+  /** Jump straight to what the big screen shows now: no replay of anything missed, no confetti. */
+  const resync = useCallback(() => {
+    clearTimeout(catchUp.current);
+    const s = latest.current;
+    if (!s) return;
+    const d = s.view.draw;
+    const stillRunning = d && d.id === shownDraw.current && (s.view.phase === 'countdown' || s.view.phase === 'spinning');
+    if (animating.current && !(stillRunning && Date.now() < animEnd.current + 1000)) {
+      animating.current = false;
+      clearTimeout(syncTimer.current);
+    }
+    follow(s, true);
+  }, [follow]);
+
   const receive = useCallback(
     (state: LiveState, count?: number, timing?: Timing) => {
       if (typeof count === 'number') setViewers(count);
-      // updatedAt (server) − sentAt (big screen) = big screen → server; now (server) vs. our clock = server → us.
-      if (state && state.live && state.sentAt && timing?.updatedAt && timing.now) {
-        const screenToServer = timing.updatedAt - state.sentAt;
-        const serverToLocal = Date.now() - timing.now;
-        toLocal.current = (t) => t + screenToServer + serverToLocal;
+      let late = 0;
+      if (timing?.now) {
+        const now = Date.now();
+        offsets.current = [...offsets.current.filter((o) => now - o.at < 10 * 60_000).slice(-49), { at: now, v: now - timing.now }];
+        const serverToLocal = Math.min(...offsets.current.map((o) => o.v));
+        late = now - timing.now - serverToLocal; // how long this message was on its way (beyond normal)
+        // updatedAt (server) − sentAt (big screen) = big screen → server; server → us from the offset above.
+        if (state && state.live && state.sentAt && timing.updatedAt) {
+          const screenToServer = timing.updatedAt - state.sentAt;
+          toLocal.current = (t) => t + screenToServer + serverToLocal;
+        }
       }
       if (!state) {
         setConn('waiting');
@@ -121,9 +155,16 @@ export default function LivePage() {
       setConn('live');
       latest.current = state;
       setSnap(state);
+      if (late > 1500) {
+        // A backlog delivered after the phone woke up: let it finish arriving, then show only the
+        // newest state — never start a countdown or reel from old news.
+        clearTimeout(catchUp.current);
+        catchUp.current = setTimeout(resync, 400);
+        return;
+      }
       follow(state);
     },
-    [follow],
+    [follow, resync],
   );
 
   /* ------------------------------------------------------- connection */
@@ -196,17 +237,44 @@ export default function LivePage() {
       };
     } else startPolling();
 
-    return stop;
-  }, [receive]);
+    // Back from a locked phone / another app / a restored tab: drop anything stale, ask for the
+    // current screen straight away instead of waiting for the stream to catch up.
+    const wake = () => {
+      if (document.visibilityState !== 'visible' || closed) return;
+      resync();
+      void pollOnce();
+    };
+    const onShow = (e: PageTransitionEvent) => e.persisted && wake();
+    document.addEventListener('visibilitychange', wake);
+    window.addEventListener('pageshow', onShow);
+    window.addEventListener('focus', wake);
+    window.addEventListener('online', wake);
 
-  useEffect(() => () => clearTimeout(syncTimer.current), []);
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', wake);
+      window.removeEventListener('pageshow', onShow);
+      window.removeEventListener('focus', wake);
+      window.removeEventListener('online', wake);
+    };
+  }, [receive, resync]);
+
+  useEffect(
+    () => () => {
+      clearTimeout(syncTimer.current);
+      clearTimeout(catchUp.current);
+    },
+    [],
+  );
 
   /* --------------------------------------------------------- the show */
   const onCountdownDone = useCallback(() => {
     // Spin in step with the big screen if its reel start is already known, else start now (re-synced later).
     const d = latest.current?.view.draw;
     const conv = toLocal.current;
-    setStartAt(d && d.id === shownDraw.current && d.spinAt && conv ? conv(d.spinAt) : null);
+    const at = d && d.id === shownDraw.current && d.spinAt && conv ? conv(d.spinAt) : null;
+    animEnd.current = (at ?? Date.now()) + (d?.spinMs ?? 15000);
+    setStartAt(at);
     setPhase('spinning');
     if (soundRef.current) whoosh();
   }, []);
