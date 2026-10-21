@@ -2,33 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { BRAND, asset } from '@/lib/config';
-import type { CompanyDisplay } from '@/lib/store';
+import type { CompanyDisplay, TitleDisplay } from '@/lib/store';
 
-/** The "Click" cursor mark — an arrow pointer with click ripples. */
+/** The Click 2026 chevron mark. */
 export function ClickMark({ className = 'brand-mark' }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 64 64" aria-hidden>
-      <defs>
-        <linearGradient id="cm-g" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#ff3d8b" />
-          <stop offset=".55" stopColor="#8b5cf6" />
-          <stop offset="1" stopColor="#22d3ee" />
-        </linearGradient>
-      </defs>
-      <rect width="64" height="64" rx="18" fill="#140f3a" stroke="rgba(255,255,255,.18)" />
-      <g stroke="#ffc542" strokeWidth="3" strokeLinecap="round" opacity=".95">
-        <path d="M16 13l3 4" />
-        <path d="M10 22h5" />
-        <path d="M26 9v5" />
-      </g>
-      <path
-        d="M24 19 L47 40 L36.5 41.5 L42.5 53.5 L37 56 L31 43.5 L24 50 Z"
-        fill="url(#cm-g)"
-        stroke="#fff"
-        strokeWidth="2.5"
-        strokeLinejoin="round"
-      />
-    </svg>
+    <span className={className} aria-hidden>
+      <img src={asset(BRAND.mark)} alt="" />
+    </span>
   );
 }
 
@@ -36,7 +17,7 @@ export function BrandBlock({
   eventTitle,
   company,
   logo,
-  display = 'name',
+  display = 'logo',
 }: {
   eventTitle?: string;
   company?: string;
@@ -46,17 +27,44 @@ export function BrandBlock({
   // An uploaded logo (admin → Display settings) wins over the one configured in lib/config.ts.
   const src = logo || (BRAND.logo ? asset(BRAND.logo) : null);
   const name = (company ?? BRAND.company).trim();
+  // Wide logos (wordmarks like EGUARDIAN) sit above the event title; square ones replace the mark.
+  const [wide, setWide] = useState(!logo && !!BRAND.logo);
   const showLogo = !!src && display !== 'name';
-  const showName = !!name && (display !== 'logo' || !src); // no logo yet → fall back to the name
+  const showName = !!name && (display === 'name' || display === 'both' || !src); // no logo yet → fall back to the name
+  const logoImg = showLogo && (
+    <img
+      className={wide ? 'brand-wordmark' : 'brand-logo'}
+      src={src!}
+      alt={name || 'Company logo'}
+      onLoad={(e) => setWide(e.currentTarget.naturalWidth / Math.max(1, e.currentTarget.naturalHeight) > 2.5)}
+    />
+  );
   return (
     <div className="brand">
-      {/* The logo takes the place of the "Click" cursor mark. */}
-      {showLogo ? <img className="brand-logo" src={src!} alt={name || 'Company logo'} /> : <ClickMark />}
+      {showLogo && !wide ? logoImg : <ClickMark />}
       <div className="brand-text">
+        {showLogo && wide && logoImg}
         {showName && <span className="brand-company">{name}</span>}
         <span className="brand-event">{eventTitle || BRAND.event}</span>
       </div>
     </div>
+  );
+}
+
+/** The event title on the welcome screen: the event logo (uploaded or built-in), or the title as text. */
+export function EventTitle({ title, logo, show = 'logo' }: { title: string; logo?: string; show?: TitleDisplay }) {
+  const src = logo || (BRAND.eventLogo ? asset(BRAND.eventLogo) : null);
+  if (show === 'logo' && src) {
+    return (
+      <h1 className="title title-logo">
+        <img src={src} alt={title} />
+      </h1>
+    );
+  }
+  return (
+    <h1 className="title">
+      <span className="grad-text">{title}</span>
+    </h1>
   );
 }
 

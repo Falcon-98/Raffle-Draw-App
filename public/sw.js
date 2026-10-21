@@ -5,9 +5,19 @@
  *  - build files (/_next/static, hashed) and Google Fonts: cache first
  *  - everything else from this site: cached copy at once, refreshed in the background
  */
-const CACHE = 'click2026-raffle-v1';
+const CACHE = 'click2026-raffle-v2';
 const BASE = new URL(self.registration.scope).pathname; // e.g. /Raffle-Draw-App/
-const PRECACHE = ['', 'admin/', 'sample-participants.csv', 'favicon.svg', 'manifest.webmanifest'].map((p) => BASE + p);
+const PRECACHE = [
+  '',
+  'admin/',
+  'sample-participants.csv',
+  'favicon.png',
+  'icon-192.png',
+  'manifest.webmanifest',
+  'brand/click-2026-white.png',
+  'brand/eguardian-white.png',
+  'brand/click-mark-white.png',
+].map((p) => BASE + p);
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

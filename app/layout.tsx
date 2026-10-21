@@ -6,7 +6,7 @@ import ServiceWorker from '@/components/ServiceWorker';
 export const metadata: Metadata = {
   title: `${BRAND.event} · Lucky Draw | ${BRAND.company}`,
   description: `${BRAND.company} ${BRAND.event} — live, fair and transparent customer lucky draw.`,
-  icons: { icon: asset('/favicon.svg') },
+  icons: { icon: asset('/favicon.png'), apple: asset('/icon-192.png') },
   manifest: asset('/manifest.webmanifest'),
 };
 

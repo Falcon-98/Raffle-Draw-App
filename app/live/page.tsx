@@ -7,10 +7,10 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Background, BrandBlock } from '@/components/Brand';
+import { Background, BrandBlock, EventTitle } from '@/components/Brand';
 import Bubbles from '@/components/Bubbles';
 import Reel from '@/components/Reel';
-import { COUNTDOWN_MS, Countdown, WinnerName, celebrate, groupByPrize } from '@/components/Stage';
+import { COUNTDOWN_MS, Countdown, WinnerMeta, WinnerName, celebrate, groupByPrize, metaLine } from '@/components/Stage';
 import { IconFinger, IconGift, IconShield, IconTrophy, Trophy } from '@/components/Icons';
 import { type LiveDraw, type LiveSnapshot, type LiveState, liveGet, normalizeServer } from '@/lib/live';
 import { fanfare, unlockAudio, whoosh } from '@/lib/sound';
@@ -295,9 +295,7 @@ export default function LivePage() {
                     Prize {totals.drawn + 1} of {totals.total}
                   </span>
                 )}
-                <h1 className="title">
-                  <span className="grad-text">{b.eventTitle}</span>
-                </h1>
+                <EventTitle title={b.eventTitle} logo={b.eventLogo} show={b.titleDisplay ?? 'text'} />
                 <p className="subtitle">{finished ? 'Thank you for joining us — congratulations to all our winners!' : b.eventSubtitle}</p>
                 <div className="stats">
                   <div className="stat">
@@ -367,12 +365,7 @@ export default function LivePage() {
                 </span>
                 <div className="congrats">🎉 Congratulations!</div>
                 <WinnerName name={draw.name} colors={b.nameColors} />
-                {(draw.ticket || draw.group) && (
-                  <div className="winner-meta">
-                    {draw.ticket && <span className="meta-chip">🎟️ {draw.ticket}</span>}
-                    {draw.group && <span className="meta-chip">📍 {draw.group}</span>}
-                  </div>
-                )}
+                <WinnerMeta code={draw.ticket} org={draw.group} />
                 <div className="verify">
                   Draw #{draw.drawNo} · {new Date(draw.at).toLocaleTimeString()} · 1 of {draw.pool.toLocaleString()} · Pool {draw.fingerprint}
                 </div>
@@ -395,7 +388,7 @@ export default function LivePage() {
                         {ws.map((w) => (
                           <li key={w.id}>
                             <span className="who">{w.name}</span>
-                            {(w.ticket || w.group) && <span className="what">{[w.ticket, w.group].filter(Boolean).join(' · ')}</span>}
+                            {metaLine(w) && <span className="what">{metaLine(w)}</span>}
                           </li>
                         ))}
                       </ol>
@@ -420,7 +413,7 @@ export default function LivePage() {
                     <div className="who">{w.name}</div>
                     <div className="what">
                       {w.prize}
-                      {w.ticket ? ` · ${w.ticket}` : ''}
+                      {w.group ? ` · ${w.group}` : ''}
                     </div>
                   </div>
                 </li>
