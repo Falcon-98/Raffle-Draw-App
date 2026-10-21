@@ -107,10 +107,14 @@ export function WinnerMeta({ code, org }: { code?: string; org?: string }) {
 /** "Organization · Code" for lists (winners board, showcase). */
 export const metaLine = (w: { ticket?: string; group?: string }) => [w.group, w.ticket].filter(Boolean).join(' · ');
 
-/** Winners grouped by prize, in the order of the prize list (other prizes after). */
+/**
+ * Winners grouped by prize, main prize first. The prize list is drawn from the top down (e.g.
+ * 3rd → 2nd → 1st), so it is shown the other way round: 1st, 2nd, 3rd; prizes no longer in the
+ * list come last.
+ */
 export function groupByPrize<W extends { prize: string; drawNo: number }>(ws: W[], order: string[]): [string, W[]][] {
   const map = new Map<string, W[]>();
-  for (const p of order) map.set(p, []);
+  for (const p of [...order].reverse()) map.set(p, []);
   for (const w of [...ws].sort((a, b) => a.drawNo - b.drawNo)) {
     if (!map.has(w.prize)) map.set(w.prize, []);
     map.get(w.prize)!.push(w);

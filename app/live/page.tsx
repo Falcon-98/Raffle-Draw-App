@@ -413,7 +413,6 @@ export default function LivePage() {
             <ol>
               {boardWinners.map((w) => (
                 <li key={w.id}>
-                  <span className="no">{w.drawNo}</span>
                   <div style={{ minWidth: 0 }}>
                     <div className="who">{w.name}</div>
                     <div className="what">

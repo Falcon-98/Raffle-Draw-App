@@ -362,9 +362,9 @@ export default function DisplayPage() {
 
                 {finished ? (
                   <div className="finale-list">
-                    {activeWinners(state)
-                      .sort((a, b) => a.drawNo - b.drawNo)
-                      .slice(-12)
+                    {groupByPrize(activeWinners(state), settings.prizes)
+                      .flatMap(([, ws]) => ws)
+                      .slice(0, 12)
                       .map((w) => (
                         <span key={w.id} className="meta-chip">
                           🏆 {w.name} <span className="note">· {w.prize}</span>
@@ -536,7 +536,6 @@ export default function DisplayPage() {
               <AnimatePresence initial={false}>
                 {shownWinners.map((w) => (
                   <motion.li key={w.id} layout initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}>
-                    <span className="no">{w.drawNo}</span>
                     <div style={{ minWidth: 0 }}>
                       <div className="who">{w.name}</div>
                       <div className="what">
