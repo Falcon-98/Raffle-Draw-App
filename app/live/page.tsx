@@ -57,9 +57,22 @@ export default function LivePage() {
     first.current = false;
 
     // An animation that should have finished long ago (the phone was asleep) never holds the screen.
-    if (animating.current && Date.now() > animEnd.current + 1500) {
+    if (animating.current && Date.now() > animEnd.current + 2500) {
       animating.current = false;
       clearTimeout(syncTimer.current);
+    }
+    // The winner being drawn here was removed in the admin (undo / clear all): the big screen has left
+    // that draw and it is not among the winners any more — stop and follow the big screen.
+    const removed =
+      !!shownDraw.current && (!d || d.id !== shownDraw.current) && !s.winners.some((w) => w.id === shownDraw.current);
+    if (removed && (animating.current || phaseRef.current === 'winner')) {
+      animating.current = false;
+      clearTimeout(syncTimer.current);
+      shownDraw.current = null;
+      if (p !== 'countdown' && p !== 'spinning') {
+        setDraw(null);
+        setPhase(p === 'showcase' ? 'showcase' : 'idle');
+      }
     }
 
     // A draw is under way that this phone hasn't shown yet: join it at the same point as the big
@@ -97,6 +110,7 @@ export default function LivePage() {
     // Same draw, still running here: line the reel up with the big screen's start time once known.
     if (animating.current && d && d.id === shownDraw.current && conv && phaseRef.current === 'spinning' && d.spinAt) {
       setStartAt(conv(d.spinAt));
+      animEnd.current = Math.max(animEnd.current, conv(d.spinAt) + d.spinMs);
     }
     if (animating.current) return; // let the reel finish; it re-syncs when done
 
@@ -121,8 +135,11 @@ export default function LivePage() {
     const s = latest.current;
     if (!s) return;
     const d = s.view.draw;
-    const stillRunning = d && d.id === shownDraw.current && (s.view.phase === 'countdown' || s.view.phase === 'spinning');
-    if (animating.current && !(stillRunning && Date.now() < animEnd.current + 1000)) {
+    // Only drop an animation that is really out of date (well past its end, or another draw is under
+    // way). The big screen landing a moment earlier is normal: the phone finishes its own spin first,
+    // so it never shows the winner before its reel has stopped.
+    const otherDraw = !!d && d.id !== shownDraw.current && (s.view.phase === 'countdown' || s.view.phase === 'spinning');
+    if (animating.current && (otherDraw || Date.now() > animEnd.current + 2500)) {
       animating.current = false;
       clearTimeout(syncTimer.current);
     }
@@ -268,7 +285,9 @@ export default function LivePage() {
   );
 
   /* --------------------------------------------------------- the show */
+  // (Both ignore a countdown / reel that is only still on screen while it fades out.)
   const onCountdownDone = useCallback(() => {
+    if (phaseRef.current !== 'countdown') return;
     // Spin in step with the big screen if its reel start is already known, else start now (re-synced later).
     const d = latest.current?.view.draw;
     const conv = toLocal.current;
@@ -280,7 +299,9 @@ export default function LivePage() {
   }, []);
 
   const onReelDone = useCallback(() => {
+    if (phaseRef.current !== 'spinning' || !animating.current) return;
     animating.current = false;
+    phaseRef.current = 'winner';
     setPhase('winner');
     celebrate();
     if (soundRef.current) fanfare();
