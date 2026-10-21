@@ -24,6 +24,7 @@ import { buildSnapshot, liveClose, liveCreateRoom, liveGet, liveHealth, livePubl
 import { poolFingerprint } from '@/lib/fair';
 import {
   type CompanyDisplay,
+  type TitleDisplay,
   type DisplayPhase,
   type RaffleState,
   type ScreenSettings,
@@ -40,6 +41,7 @@ import {
   prizeQty,
   prizeTotals,
   sendCommand,
+  settlePrize,
   uid,
   useCommands,
   useRaffle,
@@ -226,7 +228,7 @@ function DrawControl({
           <IconWarn />
           <span>
             All “{state.settings.currentPrize}” prizes have been drawn.{' '}
-            {nextPrize(state, state.settings.currentPrize)
+            {nextPrize(state)
               ? 'Pick the next prize above.'
               : 'Every prize has its winner — press Show all winners for the finale. To draw more, add a prize or raise a quantity in Prizes.'}
           </span>
@@ -483,6 +485,7 @@ function WinnersCard({ state, update }: CardProps) {
                 {w.forfeited && <span className="badge out" style={{ marginLeft: 8 }}>Not present</span>}
                 <div className="what">
                   {w.prize}
+                  {w.group ? ` · ${w.group}` : ''}
                   {w.ticket ? ` · ${w.ticket}` : ''} · {new Date(w.at).toLocaleTimeString()} · 1 of {w.pool}
                 </div>
               </div>
@@ -514,27 +517,32 @@ function PrizesCard({ state, update }: CardProps) {
       alert(`There is already a prize called “${p}”. Raise its quantity instead.`);
       return;
     }
-    update((s) => ({
-      ...s,
-      settings: { ...s.settings, prizes: [...s.settings.prizes, p], prizeQty: { ...s.settings.prizeQty, [p]: clampQty(qty) } },
-    }));
+    update((s) =>
+      settlePrize({
+        ...s,
+        settings: { ...s.settings, prizes: [...s.settings.prizes, p], prizeQty: { ...s.settings.prizeQty, [p]: clampQty(qty) } },
+      }),
+    );
     setName('');
     setQty(1);
   };
   const remove = (p: string) =>
     update((s) => {
       const prizes = s.settings.prizes.filter((x) => x !== p);
-      return { ...s, settings: { ...s.settings, prizes, currentPrize: s.settings.currentPrize === p ? prizes[0] ?? 'Lucky Draw' : s.settings.currentPrize } };
+      if (!prizes.length) return { ...s, settings: { ...s.settings, prizes, currentPrize: 'Lucky Draw' } };
+      return settlePrize({ ...s, settings: { ...s.settings, prizes } });
     });
   const setCount = (p: string, n: number) =>
-    update((s) => ({ ...s, settings: { ...s.settings, prizeQty: { ...s.settings.prizeQty, [p]: clampQty(n) } } }));
+    update((s) => settlePrize({ ...s, settings: { ...s.settings, prizeQty: { ...s.settings.prizeQty, [p]: clampQty(n) } } }));
   const move = (i: number, d: -1 | 1) =>
     update((s) => {
       const prizes = [...s.settings.prizes];
       const j = i + d;
       if (j < 0 || j >= prizes.length) return s;
       [prizes[i], prizes[j]] = [prizes[j], prizes[i]];
-      return { ...s, settings: { ...s.settings, prizes } };
+      // The list order is the draw order: the next draw is for the top prize that still has places.
+      const next = { ...s, settings: { ...s.settings, prizes } };
+      return { ...next, settings: { ...next.settings, currentPrize: nextPrize(next) ?? next.settings.currentPrize } };
     });
   /** Renames the prize everywhere: the list, its quantity, the next draw and the winners who won it. */
   const rename = (p: string) => {
@@ -631,8 +639,8 @@ function PrizesCard({ state, update }: CardProps) {
 
 const clampQty = (n: number) => Math.min(999, Math.max(1, Math.round(n) || 1));
 
-/** Shrink an uploaded logo to at most 320×160 so it stays small in browser storage. */
-async function logoToDataUrl(file: File): Promise<string> {
+/** Shrink an uploaded logo (by default to at most 320×160) so it stays small in browser storage. */
+async function logoToDataUrl(file: File, maxW = 320, maxH = 160): Promise<string> {
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((res, rej) => {
@@ -643,7 +651,7 @@ async function logoToDataUrl(file: File): Promise<string> {
     });
     const w = img.naturalWidth || 320;
     const h = img.naturalHeight || 160;
-    const k = Math.min(1, 320 / w, 160 / h);
+    const k = Math.min(1, maxW / w, maxH / h);
     const c = document.createElement('canvas');
     c.width = Math.max(1, Math.round(w * k));
     c.height = Math.max(1, Math.round(h * k));
@@ -842,6 +850,7 @@ function ScreenCard({ state, update, win }: CardProps & { win?: WinInfo }) {
 function SettingsCard({ state, update }: CardProps) {
   const s = state.settings;
   const logoRef = useRef<HTMLInputElement>(null);
+  const eventLogoRef = useRef<HTMLInputElement>(null);
   const set = <K extends keyof RaffleState['settings']>(k: K, v: RaffleState['settings'][K]) =>
     update((st) => ({ ...st, settings: { ...st.settings, [k]: v } }));
 
@@ -849,10 +858,10 @@ function SettingsCard({ state, update }: CardProps) {
     if (!f) return;
     try {
       const logo = await logoToDataUrl(f);
-      // First logo: show it next to the name straight away.
+      // Show the new logo straight away.
       update((st) => ({
         ...st,
-        settings: { ...st.settings, logo, companyDisplay: st.settings.companyDisplay === 'name' ? 'both' : st.settings.companyDisplay },
+        settings: { ...st.settings, logo, companyDisplay: st.settings.companyDisplay === 'name' ? 'logo' : st.settings.companyDisplay },
       }));
     } catch {
       alert('That image could not be read. Use a PNG, JPG or SVG file.');
@@ -860,6 +869,21 @@ function SettingsCard({ state, update }: CardProps) {
       if (logoRef.current) logoRef.current.value = '';
     }
   };
+
+  const uploadEventLogo = async (f?: File) => {
+    if (!f) return;
+    try {
+      // Bigger than the organization logo: it is shown large on the welcome screen.
+      const eventLogo = await logoToDataUrl(f, 1000, 320);
+      update((st) => ({ ...st, settings: { ...st.settings, eventLogo, titleDisplay: 'logo' } }));
+    } catch {
+      alert('That image could not be read. Use a PNG, JPG or SVG file.');
+    } finally {
+      if (eventLogoRef.current) eventLogoRef.current.value = '';
+    }
+  };
+  const orgLogo = s.logo || (BRAND.logo ? asset(BRAND.logo) : undefined);
+  const eventLogo = s.eventLogo || (BRAND.eventLogo ? asset(BRAND.eventLogo) : undefined);
 
   return (
     <div className="card">
@@ -877,21 +901,54 @@ function SettingsCard({ state, update }: CardProps) {
         </label>
       </div>
       <div className="setting" style={{ display: 'block' }}>
-        <b>Company</b>
-        <span style={{ display: 'block', marginBottom: 10 }}>Top-left of the display: the logo replaces the cursor icon, the name sits above the event title</span>
+        <b>Event title on the welcome screen</b>
+        <span style={{ display: 'block', marginBottom: 10 }}>The event logo, or the event title above as text</span>
+        <div className="col" style={{ gap: 10 }}>
+          <div className="seg" role="group" aria-label="Show the event title as">
+            {(
+              [
+                ['logo', 'Event logo'],
+                ['text', 'Title text'],
+              ] as [TitleDisplay, string][]
+            ).map(([k, label]) => (
+              <button key={k} className={s.titleDisplay === k ? 'active' : ''} disabled={k === 'logo' && !eventLogo} onClick={() => set('titleDisplay', k)}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="row" style={{ alignItems: 'center' }}>
+            {eventLogo && <img src={eventLogo} alt="Current event logo" className="logo-preview wide" />}
+            <button className="btn sm" onClick={() => eventLogoRef.current?.click()}>
+              <IconUpload /> {s.eventLogo ? 'Change event logo' : 'Upload another event logo'}
+            </button>
+            {s.eventLogo && (
+              <button className="btn sm" onClick={() => update((st) => ({ ...st, settings: { ...st.settings, eventLogo: undefined } }))}>
+                {BRAND.eventLogo ? 'Use the built-in logo' : 'Remove event logo'}
+              </button>
+            )}
+            <input ref={eventLogoRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden onChange={(e) => void uploadEventLogo(e.target.files?.[0])} />
+          </div>
+        </div>
+      </div>
+      <div className="setting" style={{ display: 'block' }}>
+        <b>Organization</b>
+        <span style={{ display: 'block', marginBottom: 10 }}>Top-left of the display: a wide logo (like EGUARDIAN) sits above the event title, a square one replaces the icon</span>
         <div className="col" style={{ gap: 10 }}>
           <label className="field">
-            Company name
-            <input className="input" value={s.companyName} placeholder="e.g. Guardian" onChange={(e) => set('companyName', e.target.value)} />
+            Organization name
+            <input className="input" value={s.companyName} placeholder="e.g. eGuardian" onChange={(e) => set('companyName', e.target.value)} />
           </label>
           <div className="row" style={{ alignItems: 'center' }}>
-            {s.logo && <img src={s.logo} alt="Current company logo" className="logo-preview" />}
+            {orgLogo && <img src={orgLogo} alt="Current organization logo" className="logo-preview wide" />}
             <button className="btn sm" onClick={() => logoRef.current?.click()}>
-              <IconUpload /> {s.logo ? 'Change logo' : 'Upload logo'}
+              <IconUpload /> {s.logo ? 'Change logo' : 'Upload another logo'}
             </button>
             {s.logo && (
-              <button className="btn sm" onClick={() => update((st) => ({ ...st, settings: { ...st.settings, logo: undefined, companyDisplay: 'name' } }))}>
-                Remove logo
+              <button
+                className="btn sm"
+                onClick={() => update((st) => ({ ...st, settings: { ...st.settings, logo: undefined, companyDisplay: BRAND.logo ? st.settings.companyDisplay : 'name' } }))}
+              >
+                {BRAND.logo ? 'Use the built-in logo' : 'Remove logo'}
               </button>
             )}
             <input ref={logoRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden onChange={(e) => void uploadLogo(e.target.files?.[0])} />

@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import { DEFAULT_LIVE_SERVER, asset } from './config';
 import {
   type CompanyDisplay,
+  type TitleDisplay,
   type DisplayPhase,
   type RaffleState,
   type Winner,
@@ -55,7 +56,16 @@ export type LiveWinner = { id: string; drawNo: number; name: string; ticket?: st
 export type LiveSnapshot = {
   v: 1;
   live: true;
-  brand: { company: string; logo?: string; display: CompanyDisplay; eventTitle: string; eventSubtitle: string; nameColors: string[] };
+  brand: {
+    company: string;
+    logo?: string;
+    display: CompanyDisplay;
+    eventTitle: string;
+    eventSubtitle: string;
+    nameColors: string[];
+    titleDisplay?: TitleDisplay; // missing from older displays = text
+    eventLogo?: string; // uploaded event logo only; the built-in one is on the site already
+  };
   prize: { current: string; left: number; qty: number; ok: boolean; totals?: { total: number; drawn: number; left: number } };
   prizes: string[];
   counts: { entries: number; eligible: number; winners: number };
@@ -103,6 +113,8 @@ export function buildSnapshot(
       company: st.companyName,
       logo: st.companyDisplay !== 'name' ? st.logo : undefined,
       display: st.companyDisplay,
+      titleDisplay: st.titleDisplay,
+      eventLogo: st.titleDisplay === 'logo' ? st.eventLogo : undefined,
       eventTitle: st.eventTitle,
       eventSubtitle: st.eventSubtitle,
       nameColors: st.nameColors,

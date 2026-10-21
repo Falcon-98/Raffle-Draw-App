@@ -3,14 +3,15 @@
  * Everything here can also be changed live from the admin panel (except the PIN).
  */
 export const BRAND = {
-  company: 'Guardian',
+  company: 'eGuardian',
   event: 'Click 2026',
   tagline: 'Customer Appreciation Lucky Draw',
-  /**
-   * Optional logo. Put your file in /public (e.g. public/brand/logo.png) and set
-   * logo: '/brand/logo.png'. Leave null to use the built-in "Click" wordmark.
-   */
-  logo: null as string | null,
+  /** Organization logo (top-left of the display). A wide wordmark sits above the event title. Null = show the name. */
+  logo: '/brand/eguardian-white.png' as string | null,
+  /** Event logo, shown big on the welcome screen in place of the event title text. Null = show the title text. */
+  eventLogo: '/brand/click-2026-white.png' as string | null,
+  /** Small square mark (top-left, admin header, favicon is made from the same artwork). */
+  mark: '/brand/click-mark-white.png',
 };
 
 /**
@@ -29,8 +30,8 @@ export const ADMIN_PIN = process.env.NEXT_PUBLIC_ADMIN_PIN || 'click2026';
 export const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || '';
 export const asset = (p: string) => `${BASE_PATH}${p.startsWith('/') ? p : `/${p}`}`;
 
-/** Prizes are drawn top to bottom, so the grand prize goes last for suspense. */
-export const DEFAULT_PRIZES = ['Special Gift', '3rd Prize', '2nd Prize', '1st Prize', 'Grand Prize'];
+/** Prizes are drawn top to bottom: 3rd, then 2nd, and the 1st gift last for suspense. */
+export const DEFAULT_PRIZES = ['3rd Gift', '2nd Gift', '1st Gift'];
 
 /** Colour presets for the winner's name (left → right gradient). */
 export const NAME_COLOR_PRESETS: { name: string; colors: string[] }[] = [

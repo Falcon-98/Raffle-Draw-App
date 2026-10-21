@@ -196,7 +196,44 @@ a {
   width: 44px;
   height: 44px;
   flex: none;
-  filter: drop-shadow(0 6px 18px rgba(139, 92, 246, 0.55));
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: #140f3a;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 6px 18px rgba(139, 92, 246, 0.45);
+}
+
+.brand-mark img {
+  display: block;
+  width: 64%;
+  height: auto;
+}
+
+/* Wide organization wordmark (EGUARDIAN) above the event name */
+.brand-wordmark {
+  display: block;
+  height: 13px;
+  width: auto;
+  max-width: 200px;
+  margin: 2px 0 5px;
+  object-fit: contain;
+  object-position: left center;
+}
+
+/* Event logo in place of the title text on the welcome screen */
+.title-logo {
+  line-height: 0;
+}
+
+.title-logo img {
+  display: block;
+  width: auto;
+  height: clamp(56px, min(13cqw, 19cqh), 300px);
+  max-width: 100%;
+  margin: 4px auto;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 40px rgba(139, 92, 246, 0.55));
 }
 
 /* Uploaded company logo, in place of the cursor mark */
@@ -792,6 +829,33 @@ kbd {
   border: 1px solid var(--line);
   font-weight: 600;
   font-size: 15px;
+}
+
+/* Organization and code on the winner card: big enough for the back of the hall */
+.winner-meta .meta-chip {
+  max-width: 100%;
+  padding: 0.45em 0.9em;
+  border-radius: 18px;
+  font-size: clamp(15px, min(1.9cqw, 3.2cqh), 36px);
+  overflow-wrap: anywhere;
+}
+
+.winner-meta .meta-chip.org {
+  font-weight: 700;
+}
+
+.winner-meta .meta-chip.code {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  letter-spacing: 0.08em;
+}
+
+.winner-meta .meta-chip.code small {
+  font-family: var(--font-body);
+  font-size: 0.7em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-right: 0.3em;
 }
 
 .verify {
@@ -2101,6 +2165,13 @@ input[type='range'] {
   align-items: end;
 }
 
+.grid-4 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1.4fr auto;
+  gap: 10px;
+  align-items: end;
+}
+
 /* Admin: draw progress & LED screen */
 .bar {
   height: 8px;
@@ -2423,7 +2494,8 @@ input[type='range'] {
   }
 
   .grid-2,
-  .grid-3 {
+  .grid-3,
+  .grid-4 {
     grid-template-columns: 1fr;
   }
 
@@ -2440,4 +2512,9 @@ input[type='range'] {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+.logo-preview.wide {
+  max-width: 220px;
+  padding: 4px 8px;
 }

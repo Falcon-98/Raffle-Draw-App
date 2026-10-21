@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Background, BrandBlock } from '@/components/Brand';
+import { Background, BrandBlock, EventTitle } from '@/components/Brand';
 import Bubbles from '@/components/Bubbles';
 import Reel, { buildReel } from '@/components/Reel';
 import Screen from '@/components/Screen';
-import { Countdown, WinnerName, bindConfetti, celebrate, groupByPrize } from '@/components/Stage';
+import { Countdown, WinnerMeta, WinnerName, bindConfetti, celebrate, groupByPrize, metaLine } from '@/components/Stage';
 import QrCode from '@/components/QrCode';
 import { type DrawShow, normalizeServer, useLivePublisher, viewerUrl } from '@/lib/live';
 import {
@@ -105,6 +105,8 @@ export default function DisplayPage() {
         id: uid(),
         participantId: chosen.id,
         name: chosen.name,
+        first: chosen.first,
+        last: chosen.last,
         ticket: chosen.ticket,
         group: chosen.group,
         prize: s.settings.currentPrize,
@@ -119,7 +121,7 @@ export default function DisplayPage() {
         const next: RaffleState = { ...st, winners: [...st.winners, record] };
         // That was the last of this prize: line up the next prize that has some left.
         if (next.settings.autoAdvance && next.settings.prizes.includes(record.prize) && prizeLeft(next, record.prize) <= 0) {
-          const np = nextPrize(next, record.prize);
+          const np = nextPrize(next);
           if (np) next.settings = { ...next.settings, currentPrize: np };
         }
         return next;
@@ -353,9 +355,7 @@ export default function DisplayPage() {
                     )}
                   </>
                 )}
-                <h1 className="title">
-                  <span className="grad-text">{settings.eventTitle}</span>
-                </h1>
+                <EventTitle title={settings.eventTitle} logo={settings.eventLogo} show={settings.titleDisplay} />
                 <p className="subtitle">{finished ? 'Thank you for joining us — congratulations to all our winners!' : settings.eventSubtitle}</p>
 
                 {finished ? (
@@ -454,7 +454,7 @@ export default function DisplayPage() {
                         {ws.map((w) => (
                           <li key={w.id}>
                             <span className="who">{w.name}</span>
-                            {(w.ticket || w.group) && <span className="what">{[w.ticket, w.group].filter(Boolean).join(' · ')}</span>}
+                            {metaLine(w) && <span className="what">{metaLine(w)}</span>}
                           </li>
                         ))}
                       </ol>
@@ -513,12 +513,7 @@ export default function DisplayPage() {
                 </span>
                 <div className="congrats">🎉 Congratulations!</div>
                 <WinnerName name={current.name} colors={settings.nameColors} />
-                {(current.ticket || current.group) && (
-                  <div className="winner-meta">
-                    {current.ticket && <span className="meta-chip">🎟️ {current.ticket}</span>}
-                    {current.group && <span className="meta-chip">📍 {current.group}</span>}
-                  </div>
-                )}
+                <WinnerMeta code={current.ticket} org={current.group} />
                 <div className="verify">
                   Draw #{current.drawNo} · {new Date(current.at).toLocaleTimeString()} · 1 of {current.pool.toLocaleString()} · Pool {current.fingerprint}
                 </div>
@@ -544,7 +539,7 @@ export default function DisplayPage() {
                       <div className="who">{w.name}</div>
                       <div className="what">
                         {w.prize}
-                        {w.ticket ? ` · ${w.ticket}` : ''}
+                        {w.group ? ` · ${w.group}` : ''}
                       </div>
                     </div>
                   </motion.li>

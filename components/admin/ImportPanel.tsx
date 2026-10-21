@@ -3,7 +3,7 @@
 import { DragEvent, FormEvent, useRef, useState } from 'react';
 import { IconClipboard, IconDownload, IconPencil, IconSparkle, IconUpload } from '@/components/Icons';
 import { asset } from '@/lib/config';
-import { downloadTemplate, parseFile, parsePasted, type ImportRow } from '@/lib/excel';
+import { downloadTemplate, joinName, parseFile, parsePasted, type ImportRow } from '@/lib/excel';
 import { type Participant, type RaffleState, participantKey, uid } from '@/lib/store';
 
 type Tab = 'upload' | 'paste' | 'manual';
@@ -22,7 +22,7 @@ export default function ImportPanel({
   const [busy, setBusy] = useState(false);
   const [over, setOver] = useState(false);
   const [paste, setPaste] = useState('');
-  const [manual, setManual] = useState({ name: '', ticket: '', group: '' });
+  const [manual, setManual] = useState({ first: '', last: '', ticket: '', group: '' });
   const [done, setDone] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -38,7 +38,7 @@ export default function ImportPanel({
     setBusy(true);
     try {
       const r = await parseFile(file);
-      if (!r.length) throw new Error('No names were found. Make sure the first sheet has a "Name" column.');
+      if (!r.length) throw new Error('No names were found. Make sure the first sheet has a "First Name" column (or a "Name" column).');
       setRows(r);
       setSource(file.name);
     } catch (e) {
@@ -123,9 +123,18 @@ export default function ImportPanel({
 
   const addManual = (e: FormEvent) => {
     e.preventDefault();
-    const name = manual.name.trim().replace(/\s+/g, ' ');
+    const first = manual.first.trim().replace(/\s+/g, ' ');
+    const last = manual.last.trim().replace(/\s+/g, ' ');
+    const name = joinName(first, last);
     if (!name) return;
-    const p: Participant = { id: uid(), name, ticket: manual.ticket.trim() || undefined, group: manual.group.trim() || undefined };
+    const p: Participant = {
+      id: uid(),
+      name,
+      first: first || undefined,
+      last: last || undefined,
+      ticket: manual.ticket.trim() || undefined,
+      group: manual.group.trim() || undefined,
+    };
     const k = participantKey(p);
     if (state.participants.some((x) => participantKey(x) === k)) {
       setError(`"${name}"${p.ticket ? ` (${p.ticket})` : ''} is already on the list.`);
@@ -133,7 +142,7 @@ export default function ImportPanel({
     }
     setError('');
     update((s) => ({ ...s, participants: [...s.participants, p] }));
-    setManual({ name: '', ticket: manual.ticket && /\d+$/.test(manual.ticket) ? bump(manual.ticket) : '', group: manual.group });
+    setManual({ first: '', last: '', ticket: manual.ticket && /\d+$/.test(manual.ticket) ? bump(manual.ticket) : '', group: manual.group });
     flashDone(`Added ${name}.`);
     nameRef.current?.focus();
   };
@@ -179,7 +188,7 @@ export default function ImportPanel({
           >
             <IconUpload />
             <strong>{busy ? 'Reading file…' : 'Drop your Excel file here, or click to choose'}</strong>
-            <span>.xlsx or .csv · columns: Name (required), Ticket / ID, Branch / Department</span>
+            <span>.xlsx or .csv · columns: First Name (required), Last Name / Surname, Code, Organization — other columns are ignored</span>
             <input ref={fileRef} type="file" accept=".xlsx,.csv,.tsv,.txt,.xls" hidden onChange={(e) => void handleFile(e.target.files?.[0])} />
           </label>
           <p className="note" style={{ marginBottom: 0 }}>
@@ -195,7 +204,7 @@ export default function ImportPanel({
         <div className="col" style={{ gap: 10 }}>
           <textarea
             className="textarea"
-            placeholder={'One person per line, e.g.\nNimal Perera\nSanduni Fernando\n\nYou can also copy rows straight from Excel (Name, Ticket, Branch).'}
+            placeholder={'One person per line, e.g.\nNimal Perera\nSanduni Fernando\n\nYou can also copy rows straight from Excel, including the header row (First Name, Last Name, Code, Organization).'}
             value={paste}
             onChange={(e) => setPaste(e.target.value)}
           />
@@ -209,17 +218,21 @@ export default function ImportPanel({
       )}
 
       {tab === 'manual' && (
-        <form className="grid-3" onSubmit={addManual}>
+        <form className="grid-4" onSubmit={addManual}>
           <label className="field">
-            Name *
-            <input ref={nameRef} className="input" value={manual.name} onChange={(e) => setManual({ ...manual, name: e.target.value })} placeholder="Full name" required />
+            First Name *
+            <input ref={nameRef} className="input" value={manual.first} onChange={(e) => setManual({ ...manual, first: e.target.value })} required />
           </label>
           <label className="field">
-            Ticket / ID
+            Last Name
+            <input className="input" value={manual.last} onChange={(e) => setManual({ ...manual, last: e.target.value })} />
+          </label>
+          <label className="field">
+            Code
             <input className="input" value={manual.ticket} onChange={(e) => setManual({ ...manual, ticket: e.target.value })} placeholder="Optional" />
           </label>
           <label className="field">
-            Branch
+            Organization
             <input className="input" value={manual.group} onChange={(e) => setManual({ ...manual, group: e.target.value })} placeholder="Optional" />
           </label>
           <button className="btn primary" type="submit" style={{ height: 44 }}>
@@ -255,8 +268,8 @@ export default function ImportPanel({
                 <tr>
                   <th>#</th>
                   <th>Name</th>
-                  <th>Ticket / ID</th>
-                  <th>Branch</th>
+                  <th>Code</th>
+                  <th>Organization</th>
                 </tr>
               </thead>
               <tbody>

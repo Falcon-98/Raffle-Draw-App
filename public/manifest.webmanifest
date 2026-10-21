@@ -1,5 +1,5 @@
 {
-  "name": "Click 2026 · Lucky Draw",
+  "name": "eGuardian Click 2026 · Lucky Draw",
   "short_name": "Lucky Draw",
   "description": "Live, fair and transparent customer lucky draw.",
   "start_url": "./",
@@ -7,5 +7,8 @@
   "display": "standalone",
   "background_color": "#0a0820",
   "theme_color": "#0a0820",
-  "icons": [{ "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
 }

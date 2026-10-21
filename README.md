@@ -1,4 +1,4 @@
-# Guardian · Click 2026 — Live Lucky Draw
+# eGuardian · Click 2026 — Live Lucky Draw
 
 A colourful, animated raffle for the **Click 2026** customer event, built with **Next.js** and hosted free on **GitHub Pages**.
 
@@ -31,7 +31,7 @@ Everything runs in the browser. There is no server and no database, so nothing t
 **Event-proof**
 - **Online live view** — the audience watches the draw in real time on their own phones (link + QR code); countdown, reel, winner and winners list follow the big screen
 - Works **offline** after the first visit (service worker) and can be installed as an app
-- **Company branding** from the admin: company name, uploaded logo (it replaces the cursor icon top-left), shown as *Name*, *Logo* or *Logo + name*; title, subtitle, sound, spin time and more change live
+- **eGuardian · Click 2026 branding** built in: the CLICK 2026 event logo on the welcome screen, the EGUARDIAN logo top-left, the Click mark as the app icon. Both logos can be replaced (or the title shown as text) from the admin; title, subtitle, sound, spin time and more change live
 - Admin and display stay in sync in the same browser; opening the display twice can't cause a double draw
 
 ---
@@ -70,7 +70,7 @@ The workflow works out the URL prefix from the repository name, so a fork or ren
 
 ## Try it with demo data
 
-No list yet? Open the admin console, unlock it, and click **Demo data** in *Add participants*. It loads **150 fictional participants** (Sri Lankan names, tickets `DEMO-0001`… `DEMO-0150`, ten branches). You get the normal preview first, then choose **Add**. Then open the live display and draw.
+No list yet? Open the admin console, unlock it, and click **Demo data** in *Add participants*. It loads **150 fictional participants** in the same layout as the registration export (First Name, Surname, Organization, Code). You get the normal preview first, then choose **Add**. Then open the live display and draw.
 
 - The same list can be downloaded as a file to test the upload flow: [`public/sample-participants.csv`](public/sample-participants.csv), also served at `https://falcon-98.github.io/Raffle-Draw-App/sample-participants.csv`.
 - All names are made up. Before the real event, remove them with **Participants → Clear** (or **Backup & reset → Reset all**) and clear any demo winners.
@@ -97,7 +97,7 @@ Settings go in a `.env` file: `cp .env.example .env` and fill in what you need (
 2. Open the **admin** page in Chrome or Edge on the laptop screen and unlock it with the PIN.
 3. Click **Open live display**. Drag that new window to the projector and press **F** for full screen. The admin header turns green: **Display connected**.
 4. Click once anywhere on the display window so the browser allows sound.
-5. Set up the prizes (**Prizes** card: name, how many, order with ↑ ↓, rename with ✎). Prizes are drawn top to bottom — the defaults put the Grand Prize last. **Undo** a win and that prize is selected again for a redraw. Pick the prize chip, then press **Draw a winner**. On the display itself, **Space** also draws, **Esc** returns to the welcome screen and **?** lists all shortcuts.
+5. Set up the prizes (**Prizes** card: name, how many, order with ↑ ↓, rename with ✎). Prizes are drawn **top to bottom, in the order of the list** — the defaults are *3rd Gift → 2nd Gift → 1st Gift*. Rearranging the list re-selects the top prize that still has places, so the list is always the draw order. **Undo** a win and that prize is selected again for a redraw. Pick the prize chip, then press **Draw a winner**. On the display itself, **Space** also draws, **Esc** returns to the welcome screen and **?** lists all shortcuts.
 6. **Winner not here?** In **Winners**, press **Not present** next to their name. They are kept in the record as *Not present* and can't be drawn again, and the same prize is selected so you can draw again straight away.
 7. When a prize runs out the next one is selected automatically (turn off *Next prize automatically* in *Display settings* to choose yourself). When everything has been drawn the draw stops: the admin button reads *All N prizes drawn*, Space on the display is refused, and the display shows a "draw complete" screen with the winners. To draw more, add a prize or raise a quantity.
 8. For the finale press **Show all winners** (or **W** on the display) for a full-screen list of every winner, grouped by prize.
@@ -128,16 +128,20 @@ The layout adapts to the canvas shape: on short strips the subtitle, stats and t
 
 Click **Excel template** in the admin to download the ready-made file.
 
-| Name *(required)* | Ticket / ID | Branch / Department |
-|---|---|---|
-| Nimal Perera | C26-0001 | Colombo |
+| First Name *(required)* | Last Name | Code | Organization |
+|---|---|---|---|
+| Nimal | Perera | C26NP0001ABC | Example Holdings (Pvt) Ltd |
 
-- Accepts **.xlsx** and **.csv**. (Old **.xls**: open it in Excel and *Save As → Excel Workbook*.)
-- The first sheet is read. A header row is detected automatically (a column called *Name*, *Full name*, *Customer name*, … is the name; *Ticket*, *ID*, *No.*, *Code* is the ticket; *Branch*, *Department*, *City*, … is the branch — so a "Customer ID" column is never mistaken for the name). Without a header, column A is the name, B the ticket, C the branch.
-- **Copy & paste** works with plain names (one per line) or rows copied straight out of Excel.
-- Duplicates are skipped — same Ticket/ID, or same name when there is no ID. Before anything is added you see a preview with counts, and you choose **Add** or **Replace current list**.
+**The registration export can be uploaded as it is.** Only four columns are used — *First Name*, *Surname* (or *Last Name*), *Code* and *Organization* — and every other column (email, mobile, WhatsApp, designation, passport/NIC…) is ignored: it is never stored, shown or sent to the live view.
 
-**Excluding people:** use the switch next to each name, **Exclude by list** to paste many names/IDs at once, or **Exclude all shown** after a search (e.g. search a branch name). Excluded people stay on the list and can be switched back on.
+- On screen the winner appears as **First + Last name**, with their **Organization** and **Code** below. The winners board shows prize · organization.
+- Names typed all in lower case or ALL CAPS are tidied (*vinu randula* → *Vinu Randula*); a surname that was also typed into the first-name cell is not repeated.
+- Accepts **.xlsx** and **.csv**. (Old **.xls**: open it in Excel and *Save As → Excel Workbook*.) The first sheet is read; the header row is detected automatically. Without a header, column A is the name, B the code, C the organization.
+- **Copy & paste** works with plain names (one per line) or rows copied straight out of Excel (with the header row).
+- Duplicates are skipped — same Code, or same name when there is no code. Uploading the same file again adds nobody. Before anything is added you see a preview with counts, and you choose **Add** or **Replace current list**.
+- **Winners → Excel** and **Participants → Export** use the same columns: First Name, Last Name, Code, Organization.
+
+**Excluding people:** use the switch next to each name, **Exclude by list** to paste many names/codes at once, or **Exclude all shown** after a search (e.g. search an organization). Excluded people stay on the list and can be switched back on.
 
 ## 5. Why the audience can trust it
 
@@ -145,7 +149,7 @@ Click **Excel template** in the admin to download the ready-made file.
 - **Result locked first** — the winner is chosen and saved *before* the reel starts. The animation only reveals it; refreshing the page cannot re-roll a result.
 - **The reel always stops on the winner** — the name that lands in the window is always the saved, announced winner, on any screen size (including 1024×768 projectors) and even if the window is resized or switched to full screen mid-spin.
 - **Pool fingerprint** — the footer shows a short SHA-256 fingerprint of the eligible list. It only changes if someone is added or removed, so you can show it before the first draw and anyone can see it stays consistent. Each winner record stores the fingerprint and pool size at that moment.
-- **Audit export** — **Winners → Excel** gives draw number, prize, name, ticket, time, pool size and fingerprint.
+- **Audit export** — **Winners → Excel** gives draw number, prize, first and last name, code, organization, time, pool size and fingerprint.
 - **One prize per person** (on by default) automatically removes winners from later draws.
 - **No double draws** — if the display is accidentally open in two windows, a single *Draw a winner* click still produces exactly one winner; both windows show the same name.
 - **Stable draw numbers** — undoing a win never causes a later draw to reuse an earlier draw number.
@@ -155,7 +159,9 @@ Click **Excel template** in the admin to download the ready-made file.
 
 | What | Where |
 |---|---|
-| Company name and logo | Admin → *Display settings → Company*: type the name, upload a logo (PNG, JPG, SVG; resized automatically) and choose **Name**, **Logo** or **Logo + name**. The logo takes the place of the cursor icon at the top-left of the display; the name appears above the event title. Saved in the browser and in backups. For a permanent default, set `company` in `lib/config.ts`, or put a file in `public/brand/` and set `logo: '/brand/logo.png'`. |
+| Event logo | Admin → *Display settings → Event title on the welcome screen*: **Event logo** (built-in CLICK 2026 logo, or upload another) or **Title text**. Built-in file: `public/brand/click-2026-white.png` (`BRAND.eventLogo` in `lib/config.ts`). |
+| Organization name and logo | Admin → *Display settings → Organization*: the built-in EGUARDIAN logo sits top-left above the event name; upload another (PNG, JPG, SVG; resized automatically) and choose **Name**, **Logo** or **Logo + name**. Built-in file: `public/brand/eguardian-white.png` (`BRAND.logo`). |
+| Icon | `public/brand/click-mark-white.png` (top-left / admin), `public/favicon.png`, `public/icon-192.png`, `public/icon-512.png` |
 | Default company name, event name, tagline | `lib/config.ts` |
 | Default prize list | `lib/config.ts` → `DEFAULT_PRIZES` (names, quantities and order are editable live in the admin) |
 | Winner name colours | Admin → *Display settings → Winner name colours*: presets (Aurora, Gold, Sunset, Ocean, Emerald, White) or three custom colours, with a live preview. More presets: `NAME_COLOR_PRESETS` in `lib/config.ts` |
@@ -164,7 +170,7 @@ Click **Excel template** in the admin to download the ready-made file.
 
 ## 7. Good to know
 
-- The admin PIN is a *soft* gate that keeps the audience out of the admin screen. A static site cannot hide data from someone determined, so do not include phone numbers, NICs or other private data in the list — names and ticket numbers are enough.
+- The admin PIN is a *soft* gate that keeps the audience out of the admin screen. A static site cannot hide data from someone determined; that is why only name, code and organization are kept from the uploaded sheet.
 - Large lists are fine: thousands of names import in a second; the bubbles show them in rotating groups; the reel samples from the pool.
 - Fonts load from Google Fonts and are cached for offline use after the first visit. Without that visit and without internet, the page still works with system fonts. You can also run it locally with `npm run build && npm run preview`.
 - After a new deploy, the next online visit loads the new version automatically (pages are always fetched fresh when online).
@@ -247,7 +253,7 @@ On Cloudflare the same options are `ALLOWED_ORIGINS` in `cloudflare/wrangler.tom
 
 ### Privacy
 
-Everything sent to viewers is public to anyone with the link: the event branding, current prize, counts, up to 60 participant names for the floating bubbles, and the winners (name, ticket and branch, as on the big screen). The full participant list, exclusions and settings never leave the laptop.
+Everything sent to viewers is public to anyone with the link: the event branding, current prize, counts, up to 60 participant names for the floating bubbles, and the winners (name, organization and code, as on the big screen). The full participant list, exclusions and settings never leave the laptop.
 
 ## Project structure
 

@@ -89,6 +89,24 @@ export function WinnerName({ name, colors }: { name: string; colors?: string[] }
   );
 }
 
+/** Organization and code under the winner's name. */
+export function WinnerMeta({ code, org }: { code?: string; org?: string }) {
+  if (!code && !org) return null;
+  return (
+    <div className="winner-meta">
+      {org && <span className="meta-chip org">🏢 {org}</span>}
+      {code && (
+        <span className="meta-chip code">
+          <small>Code</small> {code}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** "Organization · Code" for lists (winners board, showcase). */
+export const metaLine = (w: { ticket?: string; group?: string }) => [w.group, w.ticket].filter(Boolean).join(' · ');
+
 /** Winners grouped by prize, in the order of the prize list (other prizes after). */
 export function groupByPrize<W extends { prize: string; drawNo: number }>(ws: W[], order: string[]): [string, W[]][] {
   const map = new Map<string, W[]>();

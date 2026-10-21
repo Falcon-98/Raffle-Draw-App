@@ -7,9 +7,11 @@ import { BRAND, DEFAULT_LIVE_SERVER, DEFAULT_PRIZES, NAME_COLOR_PRESETS } from '
 
 export type Participant = {
   id: string;
-  name: string;
-  ticket?: string;
-  group?: string;
+  name: string; // shown on screen: first + last name
+  first?: string;
+  last?: string;
+  ticket?: string; // Code
+  group?: string; // Organization
   excluded?: boolean;
 };
 
@@ -17,8 +19,10 @@ export type Winner = {
   id: string;
   participantId: string;
   name: string;
-  ticket?: string;
-  group?: string;
+  first?: string;
+  last?: string;
+  ticket?: string; // Code
+  group?: string; // Organization
   prize: string;
   at: string; // ISO time
   drawNo: number;
@@ -49,6 +53,12 @@ export type Settings = {
   logo?: string;
   /** How the company is shown above the event title. */
   companyDisplay: CompanyDisplay;
+  /** Event title on the welcome screen: the event logo, or the title as text. */
+  titleDisplay: TitleDisplay;
+  /** Optional uploaded event logo (data URL); without it the built-in one (BRAND.eventLogo) is used. */
+  eventLogo?: string;
+  /** Branding version these settings were saved with (moves older browsers to the eGuardian defaults once). */
+  brandV?: number;
   /** Winner name colours, left → right (3 gradient stops). */
   nameColors: string[];
   /** Online live view (server/live-server.mjs). The room key only lives on this computer. */
@@ -79,6 +89,14 @@ export type LiveSettings = {
 };
 
 export type CompanyDisplay = 'name' | 'logo' | 'both';
+export type TitleDisplay = 'logo' | 'text';
+
+const BRAND_V = 2;
+/** Default prize lists of earlier versions: replaced by the current defaults while nothing has been drawn. */
+const OLD_DEFAULT_PRIZES = [
+  ['Grand Prize', '1st Prize', '2nd Prize', '3rd Prize', 'Special Gift'],
+  ['Special Gift', '3rd Prize', '2nd Prize', '1st Prize', 'Grand Prize'],
+].map((l) => l.join('|'));
 
 export type RaffleState = {
   participants: Participant[];
@@ -130,7 +148,9 @@ export const defaultState = (): RaffleState => ({
     autoAdvance: true,
     currentPrize: DEFAULT_PRIZES[0],
     companyName: BRAND.company,
-    companyDisplay: 'name',
+    companyDisplay: 'logo',
+    titleDisplay: 'logo',
+    brandV: BRAND_V,
     nameColors: NAME_COLOR_PRESETS[0].colors,
     live: { server: DEFAULT_LIVE_SERVER, showQr: false },
     screen: defaultScreen(),
@@ -176,6 +196,18 @@ export function migrate(parsed: Partial<RaffleState>): RaffleState {
     if (!currentPrize && typeof raw.currentPrizeId === 'string') currentPrize = objs.find((p) => p.id === raw.currentPrizeId)?.name ?? '';
   }
   delete raw.currentPrizeId;
+  // Saved before the eGuardian branding: switch the untouched old defaults over, once.
+  if ((raw.brandV ?? 0) < BRAND_V) {
+    if (!raw.companyName || raw.companyName === 'Guardian') raw.companyName = d.settings.companyName;
+    if (!raw.logo && (!raw.companyDisplay || raw.companyDisplay === 'name')) raw.companyDisplay = d.settings.companyDisplay;
+    const winners = Array.isArray(parsed.winners) ? parsed.winners : [];
+    if (!winners.length && OLD_DEFAULT_PRIZES.includes(prizes.join('|')) && !Object.keys(prizeQty).some((k) => prizeQty[k] !== 1)) {
+      prizes = d.settings.prizes;
+      prizeQty = {};
+      currentPrize = prizes[0];
+    }
+    raw.brandV = BRAND_V;
+  }
   return {
     participants: Array.isArray(parsed.participants) ? parsed.participants : [],
     winners: Array.isArray(parsed.winners) ? parsed.winners : [],
@@ -279,15 +311,19 @@ export function prizeTotals(s: RaffleState) {
   return { total, left, drawn: total - left };
 }
 
-/** The prize to draw after `prize` ran out: the next one in the list (wrapping) that has some left. */
-export function nextPrize(s: RaffleState, prize: string): string | null {
-  const list = s.settings.prizes;
-  const start = list.indexOf(prize);
-  for (let i = 1; i <= list.length; i++) {
-    const p = list[(start + i + list.length) % list.length];
-    if (prizeLeft(s, p) > 0) return p;
-  }
-  return null;
+/**
+ * Prizes are drawn from the top of the list down: the next prize is always the first one in the
+ * list that still has places (e.g. 3rd → 2nd → 1st), whichever prize was drawn last.
+ */
+export function nextPrize(s: RaffleState): string | null {
+  return s.settings.prizes.find((p) => prizeLeft(s, p) > 0) ?? null;
+}
+
+/** After the prize list changed: if the selected prize can't be drawn (any more), select the next one from the top. */
+export function settlePrize(s: RaffleState): RaffleState {
+  if (canDrawPrize(s) && s.settings.prizes.includes(s.settings.currentPrize)) return s;
+  const np = nextPrize(s);
+  return np ? { ...s, settings: { ...s.settings, currentPrize: np } } : s;
 }
 
 /** Can the current prize be drawn? Prizes not in the list (e.g. all removed) are unlimited. */

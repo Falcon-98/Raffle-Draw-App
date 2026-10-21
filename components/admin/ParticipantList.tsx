@@ -112,7 +112,7 @@ export default function ParticipantList({
       {bulkOpen && (
         <div className="preview" style={{ marginTop: 0, marginBottom: 14 }}>
           <h3>Exclude several people at once</h3>
-          <p className="sub">Paste names or ticket IDs — one per line. Exact matches (ignoring capitals and extra spaces) are switched off.</p>
+          <p className="sub">Paste names or codes — one per line. Exact matches (ignoring capitals and extra spaces) are switched off.</p>
           <textarea className="textarea" style={{ minHeight: 110 }} value={bulk} onChange={(e) => setBulk(e.target.value)} placeholder={'Nimal Perera\nC26-0042'} />
           <div className="row" style={{ marginTop: 10 }}>
             <button className="btn primary" onClick={applyBulk} disabled={!bulk.trim()}>
@@ -127,9 +127,9 @@ export default function ParticipantList({
       )}
 
       <div className="toolbar">
-        <div style={{ position: 'relative', flex: '1 1 220px' }}>
+        <div style={{ position: 'relative', flex: '1 1 300px' }}>
           <IconSearch style={{ position: 'absolute', left: 12, top: 13, width: 16, height: 16, color: 'var(--dim)' }} />
-          <input className="input" style={{ paddingLeft: 36 }} placeholder="Search name, ticket or branch" value={q} onChange={(e) => { setQ(e.target.value); setLimit(PAGE); }} />
+          <input className="input" style={{ paddingLeft: 36 }} placeholder="Search name, code or organization" value={q} onChange={(e) => { setQ(e.target.value); setLimit(PAGE); }} />
         </div>
         <div className="seg" role="group" aria-label="Filter">
           {(
@@ -170,8 +170,8 @@ export default function ParticipantList({
                 <tr>
                   <th style={{ width: 70 }}>In draw</th>
                   <th>Name</th>
-                  <th>Ticket / ID</th>
-                  <th className="hide-sm">Branch</th>
+                  <th>Code</th>
+                  <th className="hide-sm">Organization</th>
                   <th>Status</th>
                   <th style={{ width: 44 }} />
                 </tr>
