@@ -122,6 +122,10 @@ export function groupByPrize<W extends { prize: string; drawNo: number }>(ws: W[
   return [...map].filter(([, list]) => list.length > 0);
 }
 
+/** Winners in prize order, main prize first (1st, 2nd, 3rd …); several winners of one prize in draw order. */
+export const byPrizeRank = <W extends { prize: string; drawNo: number }>(ws: W[], order: string[]): W[] =>
+  groupByPrize(ws, order).flatMap(([, list]) => list);
+
 /** Length of the 3-2-1 countdown, in ms. */
 export const COUNTDOWN_MS = 2700;
 const STEP = COUNTDOWN_MS / 3;

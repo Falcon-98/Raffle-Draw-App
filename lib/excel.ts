@@ -166,12 +166,13 @@ export async function downloadTemplate() {
   ]).toFile('Click2026-Raffle-Template.xlsx');
 }
 
+/** Winners in the order given (the admin passes them in prize order: 1st, 2nd, 3rd …). */
 export async function downloadWinners(winners: Winner[]) {
   const { default: writeXlsxFile } = await import('write-excel-file/browser');
   const head = ['Draw #', 'Prize', ...COLUMNS, 'Status', 'Drawn at', 'Eligible pool', 'Pool fingerprint'];
   const data = [
     head.map((value) => ({ value, ...HEAD })),
-    ...[...winners].sort((a, b) => a.drawNo - b.drawNo).map((w) =>
+    ...winners.map((w) =>
       [
         String(w.drawNo),
         w.prize,
