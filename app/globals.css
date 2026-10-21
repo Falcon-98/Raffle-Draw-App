@@ -1901,24 +1901,13 @@ input[type='range'] {
 
 .win-list li {
   display: grid;
-  grid-template-columns: 30px 1fr auto auto;
+  grid-template-columns: 1fr auto auto;
   gap: 10px;
   align-items: center;
   padding: 10px 12px;
   border-radius: 12px;
   background: var(--panel);
   border: 1px solid var(--line);
-}
-
-.win-list .no {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
-  background: var(--grad);
-  font-weight: 800;
-  font-size: 13px;
 }
 
 .win-list .who {
