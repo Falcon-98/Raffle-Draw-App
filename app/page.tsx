@@ -7,7 +7,7 @@ import { Background, BrandBlock, EventTitle } from '@/components/Brand';
 import Bubbles from '@/components/Bubbles';
 import Reel, { buildReel } from '@/components/Reel';
 import Screen from '@/components/Screen';
-import { Countdown, WinnerMeta, WinnerName, bindConfetti, celebrate, groupByPrize, metaLine } from '@/components/Stage';
+import { Countdown, WinnerMeta, WinnerName, bindConfetti, byPrizeRank, celebrate, groupByPrize, metaLine } from '@/components/Stage';
 import QrCode from '@/components/QrCode';
 import { type DrawShow, normalizeServer, useLivePublisher, viewerUrl } from '@/lib/live';
 import {
@@ -258,12 +258,19 @@ export default function DisplayPage() {
     else void document.documentElement.requestFullscreen?.().catch(() => {});
   };
 
-  // Keep the newest winner (bottom of the board) in view when the list is longer than the screen.
+  // Keep the newest winner in view when the board is longer than the screen (the board is in prize
+  // order, so the newest winner is not always at the bottom).
   const boardCount = state ? activeWinners(state).length : 0;
   useEffect(() => {
     const ol = boardRef.current;
     if (!ol) return;
-    const toBottom = () => ol.scrollTo({ top: ol.scrollHeight, behavior: 'smooth' });
+    const toBottom = () => {
+      const newest = ol.querySelector<HTMLElement>('li[data-newest]');
+      if (!newest) return;
+      const top = newest.offsetTop - ol.offsetTop;
+      if (top < ol.scrollTop || top + newest.offsetHeight > ol.scrollTop + ol.clientHeight)
+        ol.scrollTo({ top: Math.max(0, top + newest.offsetHeight - ol.clientHeight), behavior: 'smooth' });
+    };
     // Again once the new row has animated in and the web fonts have settled the layout.
     const raf = requestAnimationFrame(toBottom);
     const t = setTimeout(toBottom, 500);
@@ -285,10 +292,12 @@ export default function DisplayPage() {
 
   const drawing = phase === 'countdown' || phase === 'spinning';
   // Keep the winner being drawn off the board until it is revealed.
-  // Draw order (1, 2, 3 …): each new winner joins at the bottom of the board.
-  const shownWinners = activeWinners(state)
-    .filter((w) => !(drawing && current && w.id === current.id))
-    .sort((a, b) => a.drawNo - b.drawNo);
+  // Prize order: 1st, 2nd, 3rd … (the same everywhere winners are listed).
+  const shownWinners = byPrizeRank(
+    activeWinners(state).filter((w) => !(drawing && current && w.id === current.id)),
+    settings.prizes,
+  );
+  const newestId = shownWinners.reduce<Winner | null>((a, w) => (!a || w.drawNo > a.drawNo ? w : a), null)?.id;
   const showBoard = settings.showWinnersBoard && shownWinners.length > 0 && phase !== 'showcase';
   const total = state.participants.length;
   const prizeOk = canDrawPrize(state);
@@ -362,8 +371,7 @@ export default function DisplayPage() {
 
                 {finished ? (
                   <div className="finale-list">
-                    {groupByPrize(activeWinners(state), settings.prizes)
-                      .flatMap(([, ws]) => ws)
+                    {byPrizeRank(activeWinners(state), settings.prizes)
                       .slice(0, 12)
                       .map((w) => (
                         <span key={w.id} className="meta-chip">
@@ -535,7 +543,14 @@ export default function DisplayPage() {
             <ol ref={boardRef}>
               <AnimatePresence initial={false}>
                 {shownWinners.map((w) => (
-                  <motion.li key={w.id} layout initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}>
+                  <motion.li
+                    key={w.id}
+                    data-newest={w.id === newestId ? '' : undefined}
+                    layout
+                    initial={{ opacity: 0, x: 40 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0 }}
+                  >
                     <div style={{ minWidth: 0 }}>
                       <div className="who">{w.name}</div>
                       <div className="what">

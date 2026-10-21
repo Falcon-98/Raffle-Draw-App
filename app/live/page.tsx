@@ -10,7 +10,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Background, BrandBlock, EventTitle } from '@/components/Brand';
 import Bubbles from '@/components/Bubbles';
 import Reel from '@/components/Reel';
-import { COUNTDOWN_MS, Countdown, WinnerMeta, WinnerName, celebrate, groupByPrize, metaLine } from '@/components/Stage';
+import { COUNTDOWN_MS, Countdown, WinnerMeta, WinnerName, byPrizeRank, celebrate, groupByPrize, metaLine } from '@/components/Stage';
 import { IconFinger, IconGift, IconShield, IconTrophy, Trophy } from '@/components/Icons';
 import { type LiveDraw, type LiveSnapshot, type LiveState, liveGet, normalizeServer } from '@/lib/live';
 import { fanfare, unlockAudio, whoosh } from '@/lib/sound';
@@ -246,7 +246,8 @@ export default function LivePage() {
   // While this phone is still counting down / spinning, its winner stays a secret here too —
   // even if the big screen (a moment ahead) has already revealed it.
   const hiddenId = (phase === 'countdown' || phase === 'spinning') && draw ? draw.id : null;
-  const boardWinners = hiddenId ? snap.winners.filter((w) => w.id !== hiddenId) : snap.winners;
+  // Prize order (1st, 2nd, 3rd …), as on the big screen.
+  const boardWinners = byPrizeRank(hiddenId ? snap.winners.filter((w) => w.id !== hiddenId) : snap.winners, snap.prizes);
   const showBoard = boardWinners.length > 0 && phase !== 'showcase';
   const statusLabel = conn === 'live' ? 'LIVE' : conn === 'ended' || conn === 'notfound' ? 'ENDED' : 'RECONNECTING…';
   const totals = snap.prize.totals; // missing from older display versions

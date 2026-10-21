@@ -20,6 +20,7 @@ import {
 import { BRAND, DEFAULT_LIVE_SERVER, NAME_COLOR_PRESETS, asset } from '@/lib/config';
 import { downloadWinners } from '@/lib/excel';
 import QrCode from '@/components/QrCode';
+import { byPrizeRank } from '@/components/Stage';
 import { buildSnapshot, liveClose, liveCreateRoom, liveGet, liveHealth, livePublish, normalizeServer, viewerUrl } from '@/lib/live';
 import { poolFingerprint } from '@/lib/fair';
 import {
@@ -463,7 +464,7 @@ function WinnersCard({ state, update }: CardProps) {
       <div className="card-head">
         <h2>🏆 Winners</h2>
         <div className="row">
-          <button className="btn sm" disabled={!state.winners.length} onClick={() => void downloadWinners(state.winners)}>
+          <button className="btn sm" disabled={!state.winners.length} onClick={() => void downloadWinners(byPrizeRank(state.winners, state.settings.prizes))}>
             <IconDownload /> Excel
           </button>
           <button className="btn sm danger" disabled={!state.winners.length} onClick={clear}>
@@ -477,7 +478,7 @@ function WinnersCard({ state, update }: CardProps) {
         </p>
       ) : (
         <ol className="win-list">
-          {[...state.winners].reverse().map((w) => (
+          {byPrizeRank(state.winners, state.settings.prizes).map((w) => (
             <li key={w.id} className={w.forfeited ? 'forfeited' : ''}>
               <span className="no">{w.drawNo}</span>
               <div className="who">

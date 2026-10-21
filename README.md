@@ -135,6 +135,7 @@ Click **Excel template** in the admin to download the ready-made file.
 **The registration export can be uploaded as it is.** Only four columns are used — *First Name*, *Surname* (or *Last Name*), *Code* and *Organization* — and every other column (email, mobile, WhatsApp, designation, passport/NIC…) is ignored: it is never stored, shown or sent to the live view.
 
 - On screen the winner appears as **First + Last name**, with their **Organization** and **Code** below. The winners board shows prize · organization.
+- Winners are listed **main prize first (1st, 2nd, 3rd …)** everywhere — winners board, phone view, *Our winners*, the admin list and the Excel export (which keeps the Draw # column).
 - Names typed all in lower case or ALL CAPS are tidied (*vinu randula* → *Vinu Randula*); a surname that was also typed into the first-name cell is not repeated.
 - Accepts **.xlsx** and **.csv**. (Old **.xls**: open it in Excel and *Save As → Excel Workbook*.) The first sheet is read; the header row is detected automatically. Without a header, column A is the name, B the code, C the organization.
 - **Copy & paste** works with plain names (one per line) or rows copied straight out of Excel (with the header row).
