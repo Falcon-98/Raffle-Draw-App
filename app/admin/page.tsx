@@ -1018,7 +1018,14 @@ function SettingsCard({ state, update }: CardProps) {
           ))}
         </div>
       </div>
+      <Setting
+        title="Prize on the welcome screen"
+        desc="“Now drawing”, the prize name and “Prize 1 of 3” above the event title (the prize always shows during the draw)"
+        checked={s.showPrize}
+        onChange={(v) => set('showPrize', v)}
+      />
       <Setting title="Name bubbles" desc="Float every participant's name on the welcome screen" checked={s.showBubbles} onChange={(v) => set('showBubbles', v)} />
+      {s.showBubbles && <BubbleSets state={state} set={set} />}
       <Setting title="One prize per person" desc="Winners are removed from later draws" checked={s.removeWinners} onChange={(v) => set('removeWinners', v)} />
       <Setting title="Next prize automatically" desc="When a prize runs out, select the next one that has some left" checked={s.autoAdvance} onChange={(v) => set('autoAdvance', v)} />
       <Setting title="3-2-1 countdown" desc="A countdown before the reel starts spinning" checked={s.countdown} onChange={(v) => set('countdown', v)} />
@@ -1031,6 +1038,60 @@ function SettingsCard({ state, update }: CardProps) {
         </div>
         <input type="range" min={3} max={15} step={1} value={s.spinSeconds} onChange={(e) => set('spinSeconds', Number(e.target.value))} aria-label="Reel spin time in seconds" />
       </div>
+    </div>
+  );
+}
+
+/** How the name bubbles are split into sets and how long each set stays on screen. */
+function BubbleSets({
+  state,
+  set,
+}: {
+  state: RaffleState;
+  set: <K extends keyof RaffleState['settings']>(k: K, v: RaffleState['settings'][K]) => void;
+}) {
+  const s = state.settings;
+  const total = eligible(state).length;
+  const sets = Math.max(1, Math.min(s.bubbleSets, total || 1));
+  const per = total ? Math.ceil(total / sets) : 0;
+  const round = (total ? sets : s.bubbleSets) * s.bubbleSeconds;
+  return (
+    <div className="setting" style={{ display: 'block' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+        <b>Name sets</b>
+        <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+          <button className="icon-btn" style={{ width: 30, height: 30 }} disabled={s.bubbleSets <= 1} onClick={() => set('bubbleSets', s.bubbleSets - 1)} aria-label="Fewer sets">
+            −
+          </button>
+          <span className="badge in" style={{ minWidth: 34, textAlign: 'center' }} aria-live="polite">
+            {s.bubbleSets}
+          </span>
+          <button className="icon-btn" style={{ width: 30, height: 30 }} disabled={s.bubbleSets >= 20} onClick={() => set('bubbleSets', s.bubbleSets + 1)} aria-label="More sets">
+            +
+          </button>
+        </span>
+      </div>
+      <span style={{ display: 'block', fontSize: 12, color: 'var(--muted)' }}>
+        {total
+          ? `All ${total.toLocaleString()} names in the draw are split evenly into ${sets} set${sets === 1 ? '' : 's'} of about ${per}, shown in turn so every name appears once a round.`
+          : `The names in the draw are split evenly into ${s.bubbleSets} sets, shown in turn so every name appears once a round.`}
+        {per > 70 ? ' That is a lot per set — the bubbles get small; add more sets.' : ''}
+      </span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', margin: '12px 0 8px' }}>
+        <b>Each set on screen</b>
+        <span className="badge in">
+          {s.bubbleSeconds}s · full round {round >= 60 ? `${Math.floor(round / 60)}m ${round % 60}s` : `${round}s`}
+        </span>
+      </div>
+      <input
+        type="range"
+        min={3}
+        max={30}
+        step={1}
+        value={s.bubbleSeconds}
+        onChange={(e) => set('bubbleSeconds', Number(e.target.value))}
+        aria-label="Seconds each set of names stays on screen"
+      />
     </div>
   );
 }

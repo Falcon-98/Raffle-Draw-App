@@ -36,6 +36,12 @@ export type Settings = {
   eventTitle: string;
   eventSubtitle: string;
   showBubbles: boolean;
+  /** Name bubbles: all names are split evenly into this many sets that take turns on screen. */
+  bubbleSets: number;
+  /** Seconds each set of name bubbles stays on screen. */
+  bubbleSeconds: number;
+  /** "Now drawing", the prize and "Prize 1 of 3" above the event title on the welcome screen. */
+  showPrize: boolean;
   removeWinners: boolean;
   sound: boolean;
   showWinnersBoard: boolean;
@@ -138,6 +144,9 @@ export const defaultState = (): RaffleState => ({
     eventTitle: BRAND.event,
     eventSubtitle: BRAND.tagline,
     showBubbles: true,
+    bubbleSets: 4,
+    bubbleSeconds: 9,
+    showPrize: false,
     removeWinners: true,
     sound: true,
     showWinnersBoard: true,

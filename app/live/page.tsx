@@ -255,7 +255,7 @@ export default function LivePage() {
   return (
     <main className="stage live-view">
       <Background />
-      {snap.names.length > 0 && <Bubbles names={snap.names} visible={phase === 'idle'} />}
+      {snap.names.length > 0 && <Bubbles names={snap.names} visible={phase === 'idle'} seconds={6} />}
 
       <header className="topbar">
         <BrandBlock eventTitle={b.eventTitle} company={b.company} logo={b.logo} display={b.display} />
@@ -275,25 +275,30 @@ export default function LivePage() {
           <AnimatePresence mode="wait">
             {phase === 'idle' && (
               <motion.div key="idle" className="hero" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-                <span className="kicker">{conn === 'ended' ? 'The draw has ended' : finished ? 'The draw is complete' : snap.prize.ok ? 'Now drawing' : 'Draw complete'}</span>
-                {finished ? (
-                  <span className="prize-pill">
-                    <IconTrophy /> All {totals.total} prizes drawn
-                  </span>
-                ) : (
-                  <span className="prize-pill">
-                    <IconGift /> {snap.prize.current}
-                    {snap.prize.qty > 1 && snap.prize.ok && (
-                      <span className="prize-left">
-                        {snap.prize.left} of {snap.prize.qty} left
+                {/* Same as the big screen: the prize block can be hidden in the admin (end-of-draw messages always show). */}
+                {(conn === 'ended' || finished || b.showPrize !== false) && (
+                  <>
+                    <span className="kicker">{conn === 'ended' ? 'The draw has ended' : finished ? 'The draw is complete' : snap.prize.ok ? 'Now drawing' : 'Draw complete'}</span>
+                    {finished ? (
+                      <span className="prize-pill">
+                        <IconTrophy /> All {totals.total} prizes drawn
+                      </span>
+                    ) : (
+                      <span className="prize-pill">
+                        <IconGift /> {snap.prize.current}
+                        {snap.prize.qty > 1 && snap.prize.ok && (
+                          <span className="prize-left">
+                            {snap.prize.left} of {snap.prize.qty} left
+                          </span>
+                        )}
                       </span>
                     )}
-                  </span>
-                )}
-                {totals && totals.total > 1 && !finished && snap.prize.ok && snap.prizes.includes(snap.prize.current) && (
-                  <span className="prize-count">
-                    Prize {totals.drawn + 1} of {totals.total}
-                  </span>
+                    {totals && totals.total > 1 && !finished && snap.prize.ok && snap.prizes.includes(snap.prize.current) && (
+                      <span className="prize-count">
+                        Prize {totals.drawn + 1} of {totals.total}
+                      </span>
+                    )}
+                  </>
                 )}
                 <EventTitle title={b.eventTitle} logo={b.eventLogo} show={b.titleDisplay ?? 'text'} />
                 <p className="subtitle">{finished ? 'Thank you for joining us — congratulations to all our winners!' : b.eventSubtitle}</p>
