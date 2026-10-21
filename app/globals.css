@@ -924,24 +924,13 @@ kbd {
 
 .board li {
   display: grid;
-  grid-template-columns: 34px 1fr;
+  grid-template-columns: 1fr;
   gap: 10px;
   align-items: center;
   padding: 10px 12px;
   border-radius: 14px;
   background: var(--panel);
   border: 1px solid var(--line);
-}
-
-.board .no {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  background: var(--grad);
-  font-weight: 800;
-  font-size: 14px;
 }
 
 .board .who {
