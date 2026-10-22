@@ -161,13 +161,18 @@ export default function DisplayPage() {
     }
   }, [flash, update]);
 
+  // (Both ignore a countdown / reel that is only still on screen while it fades out, e.g. after the
+  // winner was removed in the admin and the screen went back to the welcome view.)
   const onCountdownDone = useCallback(() => {
+    if (phaseRef.current !== 'countdown') return;
     phaseRef.current = 'spinning';
     setPhase('spinning');
     if (loadState().settings.sound) whoosh();
   }, []);
 
   const onReelDone = useCallback(() => {
+    if (phaseRef.current !== 'spinning') return;
+    phaseRef.current = 'winner';
     setPhase('winner');
     celebrate();
     if (loadState().settings.sound) fanfare();
@@ -188,6 +193,20 @@ export default function DisplayPage() {
     setPhase(open ? 'showcase' : 'idle');
     if (open) celebrate();
   }, []);
+
+  // The winner on screen (or being drawn) was removed in the admin (undo, clear all, reset):
+  // go back to the welcome screen — also on the phones, which follow this screen.
+  useEffect(() => {
+    if (!state) return;
+    const gone = current && !state.winners.some((w) => w.id === current.id);
+    const emptyShowcase = phase === 'showcase' && !activeWinners(state).length;
+    if ((gone && phase !== 'idle') || emptyShowcase) {
+      phaseRef.current = 'idle';
+      setPhase('idle');
+      setCurrent(null);
+      setShow(null);
+    }
+  }, [state, current, phase]);
 
   /* ----------------------------------------------- admin ↔ display link */
   useCommands((cmd) => {

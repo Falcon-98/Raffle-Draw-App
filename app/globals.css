@@ -638,7 +638,30 @@ kbd {
   mask-image: linear-gradient(180deg, transparent, #000 28%, #000 72%, transparent);
 }
 
+/* The reel is drawn twice: a blurred, dimmed strip (.back, blur set by Reel.tsx) and a sharp copy
+   clipped to the window. Only the name in the window is readable, so nobody can read the winner
+   coming up before the reel stops. */
+.reel-track.back {
+  opacity: 0.55;
+  filter: blur(calc(var(--item) * 0.1)); /* until the first frame sets it (with motion blur) */
+}
+
+.reel-clip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--item) * (var(--rows) - 1) / 2);
+  height: var(--item);
+  overflow: hidden;
+  z-index: 2;
+}
+
+.reel-clip .reel-track {
+  top: calc(var(--item) * (var(--rows) - 1) / -2);
+}
+
 .reel-window {
+  z-index: 3;
   position: absolute;
   left: 12px;
   right: 12px;
