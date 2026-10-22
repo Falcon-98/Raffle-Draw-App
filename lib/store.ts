@@ -44,6 +44,8 @@ export type Settings = {
   showPrize: boolean;
   /** The company logo + event name in the top-left corner of the display and the phone view. */
   showBrand: boolean;
+  /** The "LIVE DRAW" pill in the top-right corner of the display. */
+  showLiveBadge: boolean;
   removeWinners: boolean;
   sound: boolean;
   showWinnersBoard: boolean;
@@ -94,7 +96,15 @@ export type LiveSettings = {
   password?: string; // only if the server sets LIVE_CREATE_TOKEN
   room?: { code: string; key: string };
   showQr: boolean; // show the join QR code on the big screen
+  /** Registration by QR code is open (phones can add themselves to the draw). */
+  register?: boolean;
+  /** Last registration number already added to the participants (from the live server). */
+  regSeen?: number;
+  regRoom?: string; // the room `regSeen` belongs to
 };
+
+/** Full-screen QR code on the display: watch the draw live, or register for it. */
+export type QrKind = 'live' | 'register';
 
 export type CompanyDisplay = 'name' | 'logo' | 'both';
 export type TitleDisplay = 'logo' | 'text';
@@ -120,7 +130,7 @@ export type Command =
   | { type: 'reset-view' }
   | { type: 'confetti' }
   | { type: 'showcase' }
-  | { type: 'qr'; show?: boolean } // full-screen join QR on the display (toggle when `show` is missing)
+  | { type: 'qr'; show?: boolean; kind?: QrKind } // full-screen QR on the display (toggle when `show` is missing)
   | { type: 'status'; phase: DisplayPhase; at: number; win?: WinInfo }
   | { type: 'ping' };
 
@@ -151,6 +161,7 @@ export const defaultState = (): RaffleState => ({
     bubbleSeconds: 9,
     showPrize: false,
     showBrand: true,
+    showLiveBadge: true,
     removeWinners: true,
     sound: true,
     showWinnersBoard: true,
@@ -342,6 +353,41 @@ export function settlePrize(s: RaffleState): RaffleState {
 /** Can the current prize be drawn? Prizes not in the list (e.g. all removed) are unlimited. */
 export const canDrawPrize = (s: RaffleState) =>
   !s.settings.prizes.includes(s.settings.currentPrize) || prizeLeft(s, s.settings.currentPrize) > 0;
+
+export type Registration = { n: number; first: string; last: string; org: string; code: string; at: number };
+
+/**
+ * Adds people who registered by QR code to the participants. Safe to run again with the same
+ * registrations (each one gets a fixed id), and skips anyone already on the list (same Code, or the
+ * same name and organization, e.g. from the Excel sheet).
+ */
+export function addRegistrations(s: RaffleState, room: string, items: Registration[]): RaffleState {
+  const live = s.settings.live;
+  const seen = live.regRoom === room ? live.regSeen ?? 0 : 0;
+  const fresh = items.filter((r) => r.n > seen);
+  if (!fresh.length) return s;
+  const have = new Set<string>();
+  for (const p of s.participants) {
+    have.add(p.id);
+    if (p.ticket) have.add(`t:${norm(p.ticket)}`);
+    have.add(`n:${norm(p.name)}|${norm(p.group ?? '')}`);
+  }
+  const added: Participant[] = [];
+  for (const r of fresh) {
+    const name = `${r.first} ${r.last}`.trim();
+    const p: Participant = { id: `reg-${room}-${r.n}`, name, first: r.first, last: r.last, ticket: r.code, group: r.org };
+    const keys = [p.id, `t:${norm(r.code)}`, `n:${norm(name)}|${norm(r.org)}`];
+    if (keys.some((k) => have.has(k))) continue;
+    keys.forEach((k) => have.add(k));
+    added.push(p);
+  }
+  const regSeen = Math.max(seen, ...fresh.map((r) => r.n));
+  return {
+    ...s,
+    participants: added.length ? [...s.participants, ...added] : s.participants,
+    settings: { ...s.settings, live: { ...live, regSeen, regRoom: room } },
+  };
+}
 
 export function uid() {
   const a = new Uint32Array(2);

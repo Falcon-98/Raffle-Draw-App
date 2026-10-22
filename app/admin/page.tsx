@@ -21,7 +21,7 @@ import { BRAND, DEFAULT_LIVE_SERVER, NAME_COLOR_PRESETS, asset } from '@/lib/con
 import { downloadWinners } from '@/lib/excel';
 import QrCode from '@/components/QrCode';
 import { byPrizeRank } from '@/components/Stage';
-import { buildSnapshot, liveClose, liveCreateRoom, liveGet, liveHealth, livePublish, normalizeServer, viewerUrl } from '@/lib/live';
+import { buildSnapshot, liveClose, liveCreateRoom, liveGet, liveHealth, livePublish, normalizeServer, regSetOpen, registerUrl, useRegistrationSync, viewerUrl } from '@/lib/live';
 import { poolFingerprint } from '@/lib/fair';
 import {
   type CompanyDisplay,
@@ -58,6 +58,8 @@ export default function AdminPage() {
 
 function Admin() {
   const { state, update } = useRaffle();
+  // Registration by QR code: people who register on their phones join the draw (also when the display is closed).
+  useRegistrationSync(state, update);
   const [display, setDisplay] = useState<{ phase: DisplayPhase; at: number; win?: WinInfo } | null>(null);
   const [now, setNow] = useState(Date.now());
 
@@ -312,7 +314,7 @@ function LiveCard({ state, update, online }: CardProps & { online: boolean }) {
     setMsg(null);
     try {
       const r = await liveCreateRoom(server, live.password);
-      setLive({ server, room: r });
+      setLive({ server, room: r, register: false });
       // Show something straight away if the display window isn't open yet (it takes over once open).
       if (!online) {
         const fingerprint = await poolFingerprint(eligible(state));
@@ -333,7 +335,7 @@ function LiveCard({ state, update, online }: CardProps & { online: boolean }) {
     } catch {
       /* server gone or room already closed: forget it anyway */
     }
-    setLive({ room: undefined, showQr: false });
+    setLive({ room: undefined, showQr: false, register: false });
     setStats(null);
     setBusy(false);
   };
@@ -422,6 +424,7 @@ function LiveCard({ state, update, online }: CardProps & { online: boolean }) {
               Big, centred code for the audience to scan. Press again (or <kbd>Q</kbd> / <kbd>Esc</kbd> on the display) to close.
             </span>
           </div>
+          <RegistrationBox state={state} update={update} online={online} server={server} room={room} />
           <div className="row">
             <button className="btn danger" onClick={() => void stop()} disabled={busy}>
               Stop live view
@@ -434,6 +437,74 @@ function LiveCard({ state, update, online }: CardProps & { online: boolean }) {
           {msg.text}
         </p>
       )}
+    </div>
+  );
+}
+
+/** Registration by QR code: people scan, fill in first name, last name and organization, and join the draw. */
+function RegistrationBox({ state, update, online, server, room }: CardProps & { online: boolean; server: string; room: { code: string; key: string } }) {
+  const live = state.settings.live;
+  const open = !!live.register;
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [copied, setCopied] = useState(false);
+  const link = registerUrl(server, room.code);
+  const count = state.participants.filter((p) => p.id.startsWith(`reg-${room.code}-`)).length;
+
+  const toggle = async (v: boolean) => {
+    setBusy(true);
+    setErr('');
+    try {
+      await regSetOpen(server, room, v);
+      update((s) => ({ ...s, settings: { ...s.settings, live: { ...s.settings.live, register: v } } }));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      prompt('Copy this link:', link);
+    }
+  };
+
+  return (
+    <div className="reg-box">
+      <Setting
+        title="Registration by QR code"
+        desc="People scan a QR code and fill in their first name, last name and organization — they join the draw straight away"
+        checked={open}
+        onChange={(v) => !busy && void toggle(v)}
+      />
+      {open && (
+        <div className="live-share">
+          <QrCode value={link} label="QR code for the registration form" />
+          <div className="col" style={{ gap: 8, minWidth: 0 }}>
+            <code className="live-link reg-link">{link}</code>
+            <div className="row">
+              <button className="btn sm" onClick={() => void copy()}>
+                {copied ? '✓ Copied' : 'Copy link'}
+              </button>
+              <a className="btn sm" href={link} target="_blank" rel="noreferrer">
+                Open form
+              </a>
+              <button className="btn sm" disabled={!online} onClick={() => sendCommand({ type: 'qr', kind: 'register' })} title="Big registration QR code in the middle of the display (R on the display)">
+                ⛶ Registration QR full screen
+              </button>
+            </div>
+            <span className="note" style={{ margin: 0 }}>
+              📝 <b className="reg-count">{count}</b> registered so far · they appear in Participants within a few seconds. Close registration before the draw starts.
+            </span>
+          </div>
+        </div>
+      )}
+      {!open && count > 0 && <span className="note" style={{ margin: 0 }}>📝 {count} people registered by QR code (registration closed).</span>}
+      {err && <p className="note" style={{ color: 'var(--red)', margin: 0 }}>{err}</p>}
     </div>
   );
 }
@@ -1032,6 +1103,7 @@ function SettingsCard({ state, update }: CardProps) {
         checked={s.showBrand}
         onChange={(v) => set('showBrand', v)}
       />
+      <Setting title="“LIVE DRAW” badge" desc="The LIVE DRAW pill in the top-right corner of the big screen" checked={s.showLiveBadge} onChange={(v) => set('showLiveBadge', v)} />
       <Setting
         title="Prize on the welcome screen"
         desc="“Now drawing”, the prize name and “Prize 1 of 3” above the event title (the prize always shows during the draw)"

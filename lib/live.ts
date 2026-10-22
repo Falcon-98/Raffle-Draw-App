@@ -12,6 +12,9 @@ import {
   type TitleDisplay,
   type DisplayPhase,
   type RaffleState,
+  type Registration,
+  addRegistrations,
+  loadState,
   type Winner,
   activeWinners,
   canDrawPrize,
@@ -212,6 +215,90 @@ export const liveGet = (server: string, code: string) =>
 
 export const liveClose = (server: string, room: LiveRoom) =>
   call<{ ok: boolean }>(`${server}/api/rooms/${room.code}`, { method: 'DELETE', headers: { Authorization: `Bearer ${room.key}` } });
+
+/* -------------------------------------------------------- registration */
+
+export const regInfo = (server: string, code: string) =>
+  call<{ open: boolean; eventTitle?: string; company?: string }>(`${server}/api/rooms/${code}/register`);
+
+export const regSubmit = (server: string, code: string, data: { first: string; last: string; org: string }) =>
+  call<{ ok: boolean; code: string; name: string; existing?: boolean }>(`${server}/api/rooms/${code}/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+type RegList = { open: boolean; total: number; items: Registration[] };
+
+export const regList = (server: string, room: LiveRoom, after = 0) =>
+  call<RegList>(`${server}/api/rooms/${room.code}/registrations?after=${after}`, { headers: { Authorization: `Bearer ${room.key}` } });
+
+export const regSetOpen = (server: string, room: LiveRoom, open: boolean) =>
+  call<RegList>(`${server}/api/rooms/${room.code}/registrations`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${room.key}` },
+    body: JSON.stringify({ open }),
+  });
+
+/** The registration form people open by scanning the QR code. */
+export function registerUrl(server: string, code: string) {
+  return viewerUrl(server, code).replace(asset('/live/'), asset('/register/'));
+}
+
+const SYNC_LOCK = 'click2026:regsync';
+
+/**
+ * Brings people who registered by QR code into the participants, every few seconds while
+ * registration is open. Runs in the admin and the display window; only one of them fetches at a
+ * time (a small lock in localStorage), and adding is idempotent anyway.
+ */
+export function useRegistrationSync(state: RaffleState | null, update: (fn: (s: RaffleState) => RaffleState) => void) {
+  const live = state?.settings.live;
+  const server = live?.server ? normalizeServer(live.server) : '';
+  const room = live?.room;
+  const open = !!live?.register;
+  const me = useRef('');
+  const updateRef = useRef(update);
+  updateRef.current = update;
+
+  useEffect(() => {
+    if (!server || !room) return;
+    if (!me.current) me.current = Math.random().toString(36).slice(2);
+    const lead = () => {
+      try {
+        const v = JSON.parse(localStorage.getItem(SYNC_LOCK) || 'null') as { id: string; t: number } | null;
+        if (v && v.id !== me.current && Date.now() - v.t < 8000) return false;
+        localStorage.setItem(SYNC_LOCK, JSON.stringify({ id: me.current, t: Date.now() }));
+        return true;
+      } catch {
+        return true;
+      }
+    };
+    let alive = true;
+    let busy = false;
+    const pull = async () => {
+      if (busy || !lead()) return;
+      busy = true;
+      try {
+        // Read fresh: another window may have added some already.
+        const l = loadState().settings.live;
+        const r = await regList(server, room, l.regRoom === room.code ? l.regSeen ?? 0 : 0);
+        if (alive && r.items.length) updateRef.current((s) => (s.settings.live.room?.code === room.code ? addRegistrations(s, room.code, r.items) : s));
+      } catch {
+        /* server unreachable: try again next time */
+      } finally {
+        busy = false;
+      }
+    };
+    void pull(); // catch up (also once after registration closes)
+    if (!open) return () => void (alive = false);
+    const t = setInterval(() => void pull(), 3000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [server, room, open]);
+}
 
 /** The link the audience opens. The server address rides along unless it is the default one or this same site. */
 export function viewerUrl(server: string, code: string) {

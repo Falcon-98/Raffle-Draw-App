@@ -9,7 +9,7 @@ import Reel, { buildReel } from '@/components/Reel';
 import Screen from '@/components/Screen';
 import { Countdown, WinnerMeta, WinnerName, bindConfetti, byPrizeRank, celebrate, groupByPrize, metaLine } from '@/components/Stage';
 import QrCode from '@/components/QrCode';
-import { type DrawShow, normalizeServer, useLivePublisher, viewerUrl } from '@/lib/live';
+import { type DrawShow, normalizeServer, registerUrl, useLivePublisher, useRegistrationSync, viewerUrl } from '@/lib/live';
 import {
   IconExpand,
   IconFinger,
@@ -25,6 +25,7 @@ import {
   type DisplayPhase,
   type RaffleState,
   type ScreenSettings,
+  type QrKind,
   type WinInfo,
   type Winner,
   activeWinners,
@@ -55,7 +56,7 @@ export default function DisplayPage() {
   const [soundOk, setSoundOk] = useState(true);
   const [help, setHelp] = useState(false);
   // Full-screen QR code for the online live view (Q on the display, or the admin button).
-  const [bigQr, setBigQr] = useState(false);
+  const [bigQr, setBigQr] = useState<QrKind | false>(false);
   const boardRef = useRef<HTMLOListElement>(null);
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
@@ -74,6 +75,8 @@ export default function DisplayPage() {
 
   // Online live view: send what is on this screen to viewers' own devices.
   useLivePublisher(state, { phase, current, show, fingerprint: fp });
+  // Registration by QR code: people who register on their phones join the draw.
+  useRegistrationSync(state, update);
 
   const flash = useCallback((msg: string) => {
     setToast(msg);
@@ -211,16 +214,23 @@ export default function DisplayPage() {
     }
   }, [state, current, phase]);
 
-  /** Show / hide the full-screen join QR code; it needs a live room (Admin → Online live view → Go live). */
+  /**
+   * Show / hide a full-screen QR code: watch live (Q) or register (R). Both need a live room
+   * (Admin → Online live view → Go live); registering also needs registration to be open.
+   */
   const toggleQr = useCallback(
-    (show?: boolean) => {
+    (kind: QrKind = 'live', show?: boolean) => {
       const live = loadState().settings.live;
-      const open = show ?? !bigQrRef.current;
+      const open = show ?? bigQrRef.current !== kind;
       if (open && !live.room) {
         flash('No QR code yet — press “Go live” in the admin (Online live view) first.');
         return;
       }
-      setBigQr(open);
+      if (open && kind === 'register' && !live.register) {
+        flash('Registration is closed — open it in the admin (Online live view → Registration by QR code).');
+        return;
+      }
+      setBigQr(open ? kind : false);
     },
     [flash],
   );
@@ -229,11 +239,12 @@ export default function DisplayPage() {
   // The live view was stopped: nothing to scan any more.
   useEffect(() => {
     if (!state?.settings.live.room) setBigQr(false);
-  }, [state?.settings.live.room]);
+    else if (!state.settings.live.register) setBigQr((k) => (k === 'register' ? false : k));
+  }, [state?.settings.live.room, state?.settings.live.register]);
 
   /* ----------------------------------------------- admin ↔ display link */
   useCommands((cmd) => {
-    if (cmd.type === 'qr') toggleQr(cmd.show);
+    if (cmd.type === 'qr') toggleQr(cmd.kind, cmd.show);
     if (cmd.type === 'draw') void startDraw(cmd.requestId);
     else if (cmd.type === 'reset-view') resetView();
     else if (cmd.type === 'confetti') celebrate();
@@ -262,7 +273,8 @@ export default function DisplayPage() {
         else resetView();
       } else if (e.key.toLowerCase() === 'f') toggleFullscreen();
       else if (e.key.toLowerCase() === 'w') toggleShowcase();
-      else if (e.key.toLowerCase() === 'q') toggleQr();
+      else if (e.key.toLowerCase() === 'q') toggleQr('live');
+      else if (e.key.toLowerCase() === 'r') toggleQr('register');
       else if (e.key.toLowerCase() === 'm') update((st) => ({ ...st, settings: { ...st.settings, sound: !st.settings.sound } }));
       else if (e.key === '?' || e.key.toLowerCase() === 'h') setHelp((v) => !v);
       else if (e.key.toLowerCase() === 'g') setScreen((sc) => ({ guides: !sc.guides }));
@@ -367,9 +379,11 @@ export default function DisplayPage() {
           <span />
         )}
         <div className="top-actions">
-          <span className="pill hide-sm">
-            <span className="live-dot" /> LIVE DRAW
-          </span>
+          {settings.showLiveBadge && (
+            <span className="pill hide-sm">
+              <span className="live-dot" /> LIVE DRAW
+            </span>
+          )}
           <span className="pill">
             <IconUsersSmall /> {pool.length.toLocaleString()} <span className="hide-sm">in the draw</span>
           </span>
@@ -652,7 +666,7 @@ export default function DisplayPage() {
             key="qr-full"
             className="qr-full"
             role="dialog"
-            aria-label="Scan to watch the draw live"
+            aria-label={bigQr === 'register' ? 'Scan to register for the draw' : 'Scan to watch the draw live'}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -661,12 +675,16 @@ export default function DisplayPage() {
           >
             <motion.div className="qr-full-card" initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} transition={{ type: 'spring', stiffness: 200, damping: 20 }}>
               <h2>
-                <span className="grad-text">Scan to watch the draw live</span>
+                <span className="grad-text">{bigQr === 'register' ? 'Scan to register for the draw' : 'Scan to watch the draw live'}</span>
               </h2>
-              <QrCode value={viewerUrl(normalizeServer(settings.live.server), settings.live.room.code)} className="qr-full-code" label="QR code to watch the draw live" />
-              <p>Open your phone camera and point it at the code</p>
+              {bigQr === 'register' ? (
+                <QrCode value={registerUrl(normalizeServer(settings.live.server), settings.live.room.code)} className="qr-full-code" label="QR code to register for the draw" />
+              ) : (
+                <QrCode value={viewerUrl(normalizeServer(settings.live.server), settings.live.room.code)} className="qr-full-code" label="QR code to watch the draw live" />
+              )}
+              <p>{bigQr === 'register' ? 'Open your phone camera, scan the code and fill in your name' : 'Open your phone camera and point it at the code'}</p>
               <span className="hint hide-sm">
-                Press <kbd>Q</kbd> or <kbd>Esc</kbd> to close
+                Press <kbd>{bigQr === 'register' ? 'R' : 'Q'}</kbd> or <kbd>Esc</kbd> to close
               </span>
             </motion.div>
           </motion.div>
@@ -687,6 +705,7 @@ export default function DisplayPage() {
               <dt><kbd>F</kbd></dt><dd>Full screen</dd>
               <dt><kbd>W</kbd></dt><dd>Show all winners</dd>
               <dt><kbd>Q</kbd></dt><dd>QR code full screen (watch live on phones)</dd>
+              <dt><kbd>R</kbd></dt><dd>Registration QR code full screen</dd>
               <dt><kbd>M</kbd></dt><dd>Sound {settings.sound ? 'off' : 'on'}</dd>
               <dt><kbd>G</kbd></dt><dd>LED alignment guides</dd>
               <dt><kbd>+</kbd> <kbd>−</kbd> <kbd>0</kbd></dt><dd>Zoom in / out / reset</dd>
