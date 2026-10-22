@@ -361,7 +361,11 @@ export default function DisplayPage() {
       )}
 
       <header className="topbar">
-        <BrandBlock eventTitle={settings.eventTitle} company={settings.companyName} logo={settings.logo} display={settings.companyDisplay} />
+        {settings.showBrand ? (
+          <BrandBlock eventTitle={settings.eventTitle} company={settings.companyName} logo={settings.logo} display={settings.companyDisplay} />
+        ) : (
+          <span />
+        )}
         <div className="top-actions">
           <span className="pill hide-sm">
             <span className="live-dot" /> LIVE DRAW

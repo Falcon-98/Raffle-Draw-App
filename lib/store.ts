@@ -42,6 +42,8 @@ export type Settings = {
   bubbleSeconds: number;
   /** "Now drawing", the prize and "Prize 1 of 3" above the event title on the welcome screen. */
   showPrize: boolean;
+  /** The company logo + event name in the top-left corner of the display and the phone view. */
+  showBrand: boolean;
   removeWinners: boolean;
   sound: boolean;
   showWinnersBoard: boolean;
@@ -148,6 +150,7 @@ export const defaultState = (): RaffleState => ({
     bubbleSets: 4,
     bubbleSeconds: 9,
     showPrize: false,
+    showBrand: true,
     removeWinners: true,
     sound: true,
     showWinnersBoard: true,

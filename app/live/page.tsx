@@ -348,7 +348,7 @@ export default function LivePage() {
       {snap.names.length > 0 && <Bubbles names={snap.names} visible={phase === 'idle'} seconds={6} />}
 
       <header className="topbar">
-        <BrandBlock eventTitle={b.eventTitle} company={b.company} logo={b.logo} display={b.display} />
+        {b.showBrand !== false ? <BrandBlock eventTitle={b.eventTitle} company={b.company} logo={b.logo} display={b.display} /> : <span />}
         <div className="top-actions">
           <span className={`pill live-status ${conn}`}>
             <span className="live-dot" /> {statusLabel}

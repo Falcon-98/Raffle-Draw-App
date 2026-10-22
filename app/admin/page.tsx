@@ -1027,6 +1027,12 @@ function SettingsCard({ state, update }: CardProps) {
         </div>
       </div>
       <Setting
+        title="Logo in the top-left corner"
+        desc="The company logo and event name in the corner of the big screen and the phones"
+        checked={s.showBrand}
+        onChange={(v) => set('showBrand', v)}
+      />
+      <Setting
         title="Prize on the welcome screen"
         desc="“Now drawing”, the prize name and “Prize 1 of 3” above the event title (the prize always shows during the draw)"
         checked={s.showPrize}
