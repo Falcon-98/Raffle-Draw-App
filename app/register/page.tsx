@@ -3,13 +3,15 @@
 /**
  * Registration form people open by scanning the QR code on the big screen (or a printed one).
  * Only first name, last name and organization are asked; the live server gives back a Code and
- * the event laptop adds the person to the draw within a few seconds.
+ * the event laptop adds the person to the draw within a few seconds. With "one registration per
+ * phone" on (the default), a phone that registered once only ever gets its own registration back.
  *   /register/?r=ROOMCODE[&s=https://live-server-address]
  */
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Background, EventTitle } from '@/components/Brand';
 import { normalizeServer, regInfo, regSubmit } from '@/lib/live';
+import { deviceId } from '@/lib/device';
 import { BRAND, DEFAULT_LIVE_SERVER } from '@/lib/config';
 
 type Done = { name: string; code: string };
@@ -26,6 +28,8 @@ export default function RegisterPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState<Done | null>(null);
+  const [device, setDevice] = useState('');
+  const [onePerDevice, setOnePerDevice] = useState(true);
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
@@ -39,9 +43,23 @@ export default function RegisterPage() {
     } catch {
       /* private mode */
     }
-    regInfo(server, code)
+    deviceId()
+      .then((dev) => {
+        setDevice(dev);
+        return regInfo(server, code, dev);
+      })
       .then((r) => {
         if (r.eventTitle) setTitle(r.eventTitle);
+        setOnePerDevice(r.onePerDevice !== false);
+        // This phone registered already (the server remembers it, even if the page's note was cleared).
+        if (r.mine) {
+          setDone(r.mine);
+          try {
+            localStorage.setItem(saved(code), JSON.stringify(r.mine));
+          } catch {
+            /* private mode */
+          }
+        }
         setStatus(r.open ? 'open' : 'closed');
       })
       .catch((e: Error) => setStatus(/no live draw/i.test(e.message) ? 'notfound' : 'offline'));
@@ -51,13 +69,13 @@ export default function RegisterPage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!link || busy) return;
+    if (!link || busy || !device) return;
     const data = { first: form.first.trim(), last: form.last.trim(), org: form.org.trim() };
     if (!data.first || !data.last || !data.org) return setError('Please fill in all three fields.');
     setBusy(true);
     setError('');
     try {
-      const r = await regSubmit(link.server, link.code, data);
+      const r = await regSubmit(link.server, link.code, { ...data, device });
       const d = { name: r.name, code: r.code };
       setDone(d);
       try {
@@ -101,9 +119,13 @@ export default function RegisterPage() {
               <p className="note">Your code</p>
               <p className="register-code">{done.code}</p>
               <p className="note">Keep this page or take a screenshot — good luck!</p>
-              <button className="btn sm" onClick={again}>
-                Register someone else
-              </button>
+              {onePerDevice ? (
+                <p className="note register-once">One registration per phone — this phone is already registered.</p>
+              ) : (
+                <button className="btn sm" onClick={again}>
+                  Register someone else
+                </button>
+              )}
             </div>
           ) : status === 'open' ? (
             <form className="col" style={{ gap: 14 }} onSubmit={(e) => void submit(e)} noValidate>
@@ -125,7 +147,7 @@ export default function RegisterPage() {
                   {error}
                 </p>
               )}
-              <button className="btn primary big" type="submit" disabled={busy}>
+              <button className="btn primary big" type="submit" disabled={busy || !device}>
                 {busy ? 'Registering…' : 'Register'}
               </button>
               <p className="note" style={{ margin: 0 }}>

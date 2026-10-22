@@ -98,6 +98,8 @@ export type LiveSettings = {
   showQr: boolean; // show the join QR code on the big screen
   /** Registration by QR code is open (phones can add themselves to the draw). */
   register?: boolean;
+  /** Each phone can register only once (default on). */
+  onePerDevice?: boolean;
   /** Last registration number already added to the participants (from the live server). */
   regSeen?: number;
   regRoom?: string; // the room `regSeen` belongs to
@@ -109,7 +111,7 @@ export type QrKind = 'live' | 'register';
 export type CompanyDisplay = 'name' | 'logo' | 'both';
 export type TitleDisplay = 'logo' | 'text';
 
-const BRAND_V = 2;
+const BRAND_V = 3;
 /** Default prize lists of earlier versions: replaced by the current defaults while nothing has been drawn. */
 const OLD_DEFAULT_PRIZES = [
   ['Grand Prize', '1st Prize', '2nd Prize', '3rd Prize', 'Special Gift'],
@@ -221,7 +223,8 @@ export function migrate(parsed: Partial<RaffleState>): RaffleState {
   }
   delete raw.currentPrizeId;
   // Saved before the eGuardian branding: switch the untouched old defaults over, once.
-  if ((raw.brandV ?? 0) < BRAND_V) {
+  const brandV = raw.brandV ?? 0;
+  if (brandV < 2) {
     if (!raw.companyName || raw.companyName === 'Guardian') raw.companyName = d.settings.companyName;
     if (!raw.logo && (!raw.companyDisplay || raw.companyDisplay === 'name')) raw.companyDisplay = d.settings.companyDisplay;
     const winners = Array.isArray(parsed.winners) ? parsed.winners : [];
@@ -230,8 +233,10 @@ export function migrate(parsed: Partial<RaffleState>): RaffleState {
       prizeQty = {};
       currentPrize = prizes[0];
     }
-    raw.brandV = BRAND_V;
   }
+  // The CLICK 2026 event logo on the welcome screen, not the title as text (switched back once).
+  if (brandV < 3 && BRAND.eventLogo) raw.titleDisplay = 'logo';
+  raw.brandV = BRAND_V;
   return {
     participants: Array.isArray(parsed.participants) ? parsed.participants : [],
     winners: Array.isArray(parsed.winners) ? parsed.winners : [],

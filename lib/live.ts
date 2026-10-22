@@ -218,26 +218,30 @@ export const liveClose = (server: string, room: LiveRoom) =>
 
 /* -------------------------------------------------------- registration */
 
-export const regInfo = (server: string, code: string) =>
-  call<{ open: boolean; eventTitle?: string; company?: string }>(`${server}/api/rooms/${code}/register`);
+export type RegInfo = { open: boolean; onePerDevice?: boolean; eventTitle?: string; company?: string; mine?: { code: string; name: string } };
 
-export const regSubmit = (server: string, code: string, data: { first: string; last: string; org: string }) =>
-  call<{ ok: boolean; code: string; name: string; existing?: boolean }>(`${server}/api/rooms/${code}/register`, {
+/** Is registration open, and (with `device`) has this phone registered already? */
+export const regInfo = (server: string, code: string, device?: string) =>
+  call<RegInfo>(`${server}/api/rooms/${code}/register${device ? `?device=${device}` : ''}`);
+
+export const regSubmit = (server: string, code: string, data: { first: string; last: string; org: string; device: string }) =>
+  call<{ ok: boolean; code: string; name: string; existing?: boolean; device?: boolean }>(`${server}/api/rooms/${code}/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
 
-type RegList = { open: boolean; total: number; items: Registration[] };
+type RegList = { open: boolean; onePerDevice?: boolean; total: number; items: Registration[] };
 
 export const regList = (server: string, room: LiveRoom, after = 0) =>
   call<RegList>(`${server}/api/rooms/${room.code}/registrations?after=${after}`, { headers: { Authorization: `Bearer ${room.key}` } });
 
-export const regSetOpen = (server: string, room: LiveRoom, open: boolean) =>
+/** Open / close registration, and turn "one registration per phone" on or off. */
+export const regConfigure = (server: string, room: LiveRoom, patch: { open?: boolean; onePerDevice?: boolean }) =>
   call<RegList>(`${server}/api/rooms/${room.code}/registrations`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${room.key}` },
-    body: JSON.stringify({ open }),
+    body: JSON.stringify(patch),
   });
 
 /** The registration form people open by scanning the QR code. */

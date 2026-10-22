@@ -95,17 +95,25 @@ function cleanReg(body) {
   if (reg.first.length > MAX_FIELD || reg.last.length > MAX_FIELD || reg.org.length > MAX_FIELD) return { error: `Please keep each field under ${MAX_FIELD} characters.` };
   return { reg };
 }
+/** The phone's own random id (see app/register/page.tsx); only a salted hash of it is kept. */
+const DEVICE_RE = /^[a-f0-9]{32}$/;
 const regKey = (r) => `${r.first}|${r.last}|${r.org}`.toLowerCase();
 
-function register(room, reg) {
+/**
+ * One registration per phone (unless the admin turned that off): a phone that already registered
+ * gets its own registration back instead of a new one, whatever names it sends.
+ */
+function register(room, reg, dev) {
   room.regs ??= [];
+  const mine = room.onePerDevice !== false && room.regs.find((r) => r.dev === dev);
+  if (mine) return { status: 200, body: { ok: true, existing: true, device: true, code: mine.code, name: `${mine.first} ${mine.last}` } };
   const same = room.regs.find((r) => regKey(r) === regKey(reg));
   if (same) return { status: 200, body: { ok: true, existing: true, code: same.code, name: `${same.first} ${same.last}` } };
   if (room.regs.length >= MAX_REGS) return { status: 409, body: { error: 'Registration is full.' } };
   let code;
   do code = Array.from(randomBytes(6), (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
   while (room.regs.some((r) => r.code === code));
-  const r = { n: room.regs.length + 1, ...reg, code, at: Date.now() };
+  const r = { n: room.regs.length + 1, ...reg, code, at: Date.now(), dev };
   room.regs.push(r);
   return { status: 201, body: { ok: true, code, name: `${r.first} ${r.last}` } };
 }
@@ -268,7 +276,17 @@ const server = http.createServer(async (req, res) => {
       // Registration form (phones): is it open? / register
       if (m[2] === '/register') {
         const brand = room.state?.brand;
-        if (req.method === 'GET') return json(res, 200, { open: !!room.regOpen, eventTitle: brand?.eventTitle, company: brand?.company });
+        if (req.method === 'GET') {
+          const device = url.searchParams.get('device') || '';
+          const mine = DEVICE_RE.test(device) && room.onePerDevice !== false ? (room.regs ?? []).find((r) => r.dev === sha256(`${code}:${device}`)) : null;
+          return json(res, 200, {
+            open: !!room.regOpen,
+            onePerDevice: room.onePerDevice !== false,
+            eventTitle: brand?.eventTitle,
+            company: brand?.company,
+            ...(mine ? { mine: { code: mine.code, name: `${mine.first} ${mine.last}` } } : {}),
+          });
+        }
         if (req.method !== 'POST') return json(res, 405, { error: 'method not allowed' });
         if (!room.regOpen) return json(res, 403, { error: 'Registration is closed.' });
         if (tooMany(req)) return json(res, 429, { error: 'Too many tries — please wait a minute.' });
@@ -280,7 +298,8 @@ const server = http.createServer(async (req, res) => {
         }
         const { reg, error } = cleanReg(body);
         if (error) return json(res, 400, { error });
-        const out = register(room, reg);
+        if (!DEVICE_RE.test(String(body?.device ?? ''))) return json(res, 400, { error: 'Please reload the page and try again.' });
+        const out = register(room, reg, sha256(`${code}:${body.device}`));
         if (out.status === 201) save();
         return json(res, out.status, out.body);
       }
@@ -295,12 +314,18 @@ const server = http.createServer(async (req, res) => {
           } catch {
             return json(res, 400, { error: 'Invalid JSON' });
           }
-          room.regOpen = !!body?.open;
+          if (typeof body?.open === 'boolean') room.regOpen = body.open;
+          if (typeof body?.onePerDevice === 'boolean') room.onePerDevice = body.onePerDevice;
           save();
         } else if (req.method !== 'GET') return json(res, 405, { error: 'method not allowed' });
         const after = Number(url.searchParams.get('after')) || 0;
         const regs = room.regs ?? [];
-        return json(res, 200, { open: !!room.regOpen, total: regs.length, items: regs.filter((r) => r.n > after) });
+        return json(res, 200, {
+          open: !!room.regOpen,
+          onePerDevice: room.onePerDevice !== false,
+          total: regs.length,
+          items: regs.filter((r) => r.n > after).map(({ dev, ...r }) => r), // the device hash stays on the server
+        });
       }
 
       // Live stream for viewers

@@ -2669,3 +2669,8 @@ input[type='range'] {
   flex-direction: column;
   gap: 10px;
 }
+
+.register-once {
+  margin-top: 6px !important;
+  font-size: 13px;
+}
