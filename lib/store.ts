@@ -118,6 +118,7 @@ export type Command =
   | { type: 'reset-view' }
   | { type: 'confetti' }
   | { type: 'showcase' }
+  | { type: 'qr'; show?: boolean } // full-screen join QR on the display (toggle when `show` is missing)
   | { type: 'status'; phase: DisplayPhase; at: number; win?: WinInfo }
   | { type: 'ping' };
 

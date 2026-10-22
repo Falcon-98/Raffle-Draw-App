@@ -415,6 +415,14 @@ function LiveCard({ state, update, online }: CardProps & { online: boolean }) {
           )}
           <Setting title="QR code on the big screen" desc="Show the join code in a corner of the display (hidden while the reel spins)" checked={live.showQr} onChange={(v) => setLive({ showQr: v })} />
           <div className="row">
+            <button className="btn sm" disabled={!online} onClick={() => sendCommand({ type: 'qr' })} title="Big QR code in the middle of the display (Q on the display) — press again to close">
+              ⛶ QR full screen
+            </button>
+            <span className="note" style={{ margin: 0 }}>
+              Big, centred code for the audience to scan. Press again (or <kbd>Q</kbd> / <kbd>Esc</kbd> on the display) to close.
+            </span>
+          </div>
+          <div className="row">
             <button className="btn danger" onClick={() => void stop()} disabled={busy}>
               Stop live view
             </button>

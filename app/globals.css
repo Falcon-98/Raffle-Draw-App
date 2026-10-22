@@ -1219,6 +1219,60 @@ kbd {
   height: auto;
 }
 
+/* Full-screen join QR (Q on the display / admin "QR full screen") */
+.qr-full {
+  position: fixed !important; /* beats .stage > * { position: relative } */
+  inset: 0;
+  z-index: 70 !important;
+  display: grid;
+  place-items: center;
+  padding: 2cqh 2cqw;
+  background: rgba(8, 6, 26, 0.86);
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+}
+
+.qr-full-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(8px, 2cqh, 24px);
+  max-width: 100%;
+  max-height: 100%;
+  text-align: center;
+}
+
+.qr-full-card h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(22px, min(4.4cqw, 6cqh), 72px);
+  line-height: 1.05;
+}
+
+.qr-full-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: clamp(14px, min(1.8cqw, 2.6cqh), 30px);
+}
+
+/* As large as the screen allows, leaving room for the heading and the line below */
+.qr-full-code {
+  width: min(64cqh, 80cqw);
+  max-width: 900px;
+  padding: clamp(10px, 1.6cqh, 24px);
+  border-radius: clamp(14px, 2cqh, 28px);
+  background: #fff;
+  box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.15), 0 30px 90px -20px rgba(139, 92, 246, 0.8);
+}
+
+/* Short LED strips: just the code and a short heading */
+@container canvas (max-height: 600px) {
+  .qr-full-card p,
+  .qr-full-card .hint { display: none; }
+  .qr-full-code { width: min(74cqh, 80cqw); }
+}
+
 /* Online viewer (/live/) */
 .live-msg {
   position: relative;

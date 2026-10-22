@@ -54,6 +54,8 @@ export default function DisplayPage() {
   const [toast, setToast] = useState('');
   const [soundOk, setSoundOk] = useState(true);
   const [help, setHelp] = useState(false);
+  // Full-screen QR code for the online live view (Q on the display, or the admin button).
+  const [bigQr, setBigQr] = useState(false);
   const boardRef = useRef<HTMLOListElement>(null);
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
@@ -87,6 +89,7 @@ export default function DisplayPage() {
   /* ---------------------------------------------------------- the draw */
   const startDraw = useCallback(async (requestId: string = uid()) => {
     if (phaseRef.current === 'spinning' || phaseRef.current === 'countdown') return;
+    setBigQr(false); // the draw takes the screen
     const prev = phaseRef.current;
     phaseRef.current = 'spinning';
 
@@ -208,8 +211,29 @@ export default function DisplayPage() {
     }
   }, [state, current, phase]);
 
+  /** Show / hide the full-screen join QR code; it needs a live room (Admin → Online live view → Go live). */
+  const toggleQr = useCallback(
+    (show?: boolean) => {
+      const live = loadState().settings.live;
+      const open = show ?? !bigQrRef.current;
+      if (open && !live.room) {
+        flash('No QR code yet — press “Go live” in the admin (Online live view) first.');
+        return;
+      }
+      setBigQr(open);
+    },
+    [flash],
+  );
+  const bigQrRef = useRef(bigQr);
+  bigQrRef.current = bigQr;
+  // The live view was stopped: nothing to scan any more.
+  useEffect(() => {
+    if (!state?.settings.live.room) setBigQr(false);
+  }, [state?.settings.live.room]);
+
   /* ----------------------------------------------- admin ↔ display link */
   useCommands((cmd) => {
+    if (cmd.type === 'qr') toggleQr(cmd.show);
     if (cmd.type === 'draw') void startDraw(cmd.requestId);
     else if (cmd.type === 'reset-view') resetView();
     else if (cmd.type === 'confetti') celebrate();
@@ -234,9 +258,11 @@ export default function DisplayPage() {
         void startDraw();
       } else if (e.key === 'Escape') {
         setHelp(false);
-        resetView();
+        if (bigQrRef.current) setBigQr(false);
+        else resetView();
       } else if (e.key.toLowerCase() === 'f') toggleFullscreen();
       else if (e.key.toLowerCase() === 'w') toggleShowcase();
+      else if (e.key.toLowerCase() === 'q') toggleQr();
       else if (e.key.toLowerCase() === 'm') update((st) => ({ ...st, settings: { ...st.settings, sound: !st.settings.sound } }));
       else if (e.key === '?' || e.key.toLowerCase() === 'h') setHelp((v) => !v);
       else if (e.key.toLowerCase() === 'g') setScreen((sc) => ({ guides: !sc.guides }));
@@ -255,7 +281,7 @@ export default function DisplayPage() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [startDraw, resetView, toggleShowcase, update, setScreen]);
+  }, [startDraw, resetView, toggleShowcase, toggleQr, update, setScreen]);
 
   // Audio needs one interaction with this window.
   useEffect(() => {
@@ -606,7 +632,7 @@ export default function DisplayPage() {
         </button>
       )}
 
-      {settings.live.showQr && settings.live.room && phase !== 'countdown' && phase !== 'spinning' && (
+      {settings.live.showQr && settings.live.room && !bigQr && phase !== 'countdown' && phase !== 'spinning' && (
         <div className="join-qr">
           <QrCode value={viewerUrl(normalizeServer(settings.live.server), settings.live.room.code)} />
           <span>
@@ -615,6 +641,33 @@ export default function DisplayPage() {
           </span>
         </div>
       )}
+
+      <AnimatePresence>
+        {bigQr && settings.live.room && (
+          <motion.div
+            key="qr-full"
+            className="qr-full"
+            role="dialog"
+            aria-label="Scan to watch the draw live"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            onClick={() => setBigQr(false)}
+          >
+            <motion.div className="qr-full-card" initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} transition={{ type: 'spring', stiffness: 200, damping: 20 }}>
+              <h2>
+                <span className="grad-text">Scan to watch the draw live</span>
+              </h2>
+              <QrCode value={viewerUrl(normalizeServer(settings.live.server), settings.live.room.code)} className="qr-full-code" label="QR code to watch the draw live" />
+              <p>Open your phone camera and point it at the code</p>
+              <span className="hint hide-sm">
+                Press <kbd>Q</kbd> or <kbd>Esc</kbd> to close
+              </span>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <button className="pill help-chip hide-sm" onClick={() => setHelp((v) => !v)} aria-label="Keyboard shortcuts">
         <kbd>?</kbd> Shortcuts
@@ -629,6 +682,7 @@ export default function DisplayPage() {
               <dt><kbd>Esc</kbd></dt><dd>Back to the welcome screen</dd>
               <dt><kbd>F</kbd></dt><dd>Full screen</dd>
               <dt><kbd>W</kbd></dt><dd>Show all winners</dd>
+              <dt><kbd>Q</kbd></dt><dd>QR code full screen (watch live on phones)</dd>
               <dt><kbd>M</kbd></dt><dd>Sound {settings.sound ? 'off' : 'on'}</dd>
               <dt><kbd>G</kbd></dt><dd>LED alignment guides</dd>
               <dt><kbd>+</kbd> <kbd>−</kbd> <kbd>0</kbd></dt><dd>Zoom in / out / reset</dd>
