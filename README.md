@@ -18,7 +18,7 @@ Everything runs in the browser. There is no server and no database, so nothing t
 - Winners board in draw order (1, 2, 3 …), each new winner added at the bottom and scrolled into view; live entry counts, undo, one-prize-per-person
 - **LED wall / screen setup** — exact canvas size and position in pixels, content zoom, rotation and alignment guides; the layout adapts to wide, short LED strips
 - **Draw progress** — "Prize 2 of 6" and a progress bar on the screen; when every prize has its winners the draw stops and the screen thanks everyone with the winners list
-- Keyboard control on the display: <kbd>Space</kbd> draw · <kbd>Esc</kbd> back · <kbd>F</kbd> full screen · <kbd>W</kbd> winners · <kbd>M</kbd> sound · <kbd>G</kbd> guides · <kbd>+</kbd> <kbd>−</kbd> <kbd>0</kbd> zoom · <kbd>?</kbd> help
+- Keyboard control on the display: <kbd>Space</kbd> draw · <kbd>Esc</kbd> back · <kbd>F</kbd> full screen · <kbd>W</kbd> winners · <kbd>Q</kbd> QR code full screen · <kbd>M</kbd> sound · <kbd>G</kbd> guides · <kbd>+</kbd> <kbd>−</kbd> <kbd>0</kbd> zoom · <kbd>?</kbd> help
 
 **Participants**
 - Excel (.xlsx) / CSV upload with header detection, copy-paste from Excel, or typing; duplicate detection and a preview before anything is added

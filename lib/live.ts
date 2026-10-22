@@ -65,6 +65,7 @@ export type LiveSnapshot = {
     nameColors: string[];
     titleDisplay?: TitleDisplay; // missing from older displays = text
     showPrize?: boolean; // missing from older displays = shown
+    showBrand?: boolean; // missing from older displays = shown
     eventLogo?: string; // uploaded event logo only; the built-in one is on the site already
   };
   prize: { current: string; left: number; qty: number; ok: boolean; totals?: { total: number; drawn: number; left: number } };
@@ -116,6 +117,7 @@ export function buildSnapshot(
       display: st.companyDisplay,
       titleDisplay: st.titleDisplay,
       showPrize: st.showPrize,
+      showBrand: st.showBrand,
       eventLogo: st.titleDisplay === 'logo' ? st.eventLogo : undefined,
       eventTitle: st.eventTitle,
       eventSubtitle: st.eventSubtitle,
