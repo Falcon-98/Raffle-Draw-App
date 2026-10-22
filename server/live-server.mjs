@@ -16,6 +16,10 @@
  *   LIVE_CREATE_TOKEN  if set, creating a room needs this password (admin → Live server password)
  *   ALLOWED_ORIGINS    comma-separated origins allowed to call the API (default: any)
  *   STATIC_DIR         folder with the built site to serve (default ./out if it exists)
+ *
+ * Registration by QR code: phones POST /api/rooms/:code/register (first name, last name,
+ * organization) while the admin has registration open; the event laptop collects them with
+ * GET /api/rooms/:code/registrations (room key) and adds them to the participants.
  */
 import http from 'node:http';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
@@ -34,6 +38,8 @@ const SERVE_STATIC = existsSync(STATIC_DIR) && statSync(STATIC_DIR).isDirectory(
 const MAX_BODY = 1024 * 1024; // 1 MB per published screen (the logo is the biggest part)
 const MAX_ROOMS = 200;
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I
+const MAX_REGS = 5000; // registrations per room
+const MAX_FIELD = 60; // characters per name / organization
 
 /* ------------------------------------------------------------- storage */
 
@@ -70,6 +76,50 @@ function newCode() {
     const code = Array.from(bytes, (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
     if (!db.rooms[code]) return code;
   }
+}
+
+/* ------------------------------------------------------- registration */
+
+/** "nimal" / "NIMAL" → "Nimal" (names typed in mixed case are kept as they are). */
+const tidy = (v) =>
+  v
+    .split(' ')
+    .map((w) => (w.length > 1 && (w === w.toLowerCase() || w === w.toUpperCase()) ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w))
+    .join(' ');
+
+/** First name, last name and organization only (nothing else is accepted or kept). */
+function cleanReg(body) {
+  const f = (v) => String(v ?? '').replace(/<[^>]*>/g, ' ').replace(/[\u0000-\u001f\u007f<>]/g, '').replace(/\s+/g, ' ').trim();
+  const reg = { first: tidy(f(body?.first)), last: tidy(f(body?.last)), org: f(body?.org) };
+  if (!reg.first || !reg.last || !reg.org) return { error: 'Please fill in your first name, last name and organization.' };
+  if (reg.first.length > MAX_FIELD || reg.last.length > MAX_FIELD || reg.org.length > MAX_FIELD) return { error: `Please keep each field under ${MAX_FIELD} characters.` };
+  return { reg };
+}
+const regKey = (r) => `${r.first}|${r.last}|${r.org}`.toLowerCase();
+
+function register(room, reg) {
+  room.regs ??= [];
+  const same = room.regs.find((r) => regKey(r) === regKey(reg));
+  if (same) return { status: 200, body: { ok: true, existing: true, code: same.code, name: `${same.first} ${same.last}` } };
+  if (room.regs.length >= MAX_REGS) return { status: 409, body: { error: 'Registration is full.' } };
+  let code;
+  do code = Array.from(randomBytes(6), (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
+  while (room.regs.some((r) => r.code === code));
+  const r = { n: room.regs.length + 1, ...reg, code, at: Date.now() };
+  room.regs.push(r);
+  return { status: 201, body: { ok: true, code, name: `${r.first} ${r.last}` } };
+}
+
+// A phone can't flood a room: a few registrations a minute per address.
+const regHits = new Map();
+function tooMany(req) {
+  const ip = String(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+  const now = Date.now();
+  const hits = (regHits.get(ip) ?? []).filter((t) => now - t < 60000);
+  hits.push(now);
+  regHits.set(ip, hits);
+  if (regHits.size > 10000) regHits.clear();
+  return hits.length > 20;
 }
 
 /* -------------------------------------------------------- live viewers */
@@ -209,11 +259,49 @@ const server = http.createServer(async (req, res) => {
       return json(res, 201, { code, key });
     }
 
-    const m = /^\/api\/rooms\/([A-Z0-9]{4,16})(\/events)?$/.exec(path);
+    const m = /^\/api\/rooms\/([A-Z0-9]{4,16})(\/events|\/register|\/registrations)?$/.exec(path);
     if (m) {
       const code = m[1];
       const room = db.rooms[code];
       if (!room) return json(res, 404, { error: 'No live draw with this code' });
+
+      // Registration form (phones): is it open? / register
+      if (m[2] === '/register') {
+        const brand = room.state?.brand;
+        if (req.method === 'GET') return json(res, 200, { open: !!room.regOpen, eventTitle: brand?.eventTitle, company: brand?.company });
+        if (req.method !== 'POST') return json(res, 405, { error: 'method not allowed' });
+        if (!room.regOpen) return json(res, 403, { error: 'Registration is closed.' });
+        if (tooMany(req)) return json(res, 429, { error: 'Too many tries — please wait a minute.' });
+        let body;
+        try {
+          body = JSON.parse(await readBody(req));
+        } catch {
+          return json(res, 400, { error: 'Invalid request' });
+        }
+        const { reg, error } = cleanReg(body);
+        if (error) return json(res, 400, { error });
+        const out = register(room, reg);
+        if (out.status === 201) save();
+        return json(res, out.status, out.body);
+      }
+
+      // Admin / display: open or close registration, and fetch new registrations
+      if (m[2] === '/registrations') {
+        if (!authorised(req, room)) return json(res, 401, { error: 'Not allowed' });
+        if (req.method === 'PUT') {
+          let body;
+          try {
+            body = JSON.parse(await readBody(req));
+          } catch {
+            return json(res, 400, { error: 'Invalid JSON' });
+          }
+          room.regOpen = !!body?.open;
+          save();
+        } else if (req.method !== 'GET') return json(res, 405, { error: 'method not allowed' });
+        const after = Number(url.searchParams.get('after')) || 0;
+        const regs = room.regs ?? [];
+        return json(res, 200, { open: !!room.regOpen, total: regs.length, items: regs.filter((r) => r.n > after) });
+      }
 
       // Live stream for viewers
       if (m[2] && req.method === 'GET') {

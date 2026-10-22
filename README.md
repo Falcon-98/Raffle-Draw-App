@@ -18,10 +18,11 @@ Everything runs in the browser. There is no server and no database, so nothing t
 - Winners board in draw order (1, 2, 3 …), each new winner added at the bottom and scrolled into view; live entry counts, undo, one-prize-per-person
 - **LED wall / screen setup** — exact canvas size and position in pixels, content zoom, rotation and alignment guides; the layout adapts to wide, short LED strips
 - **Draw progress** — "Prize 2 of 6" and a progress bar on the screen; when every prize has its winners the draw stops and the screen thanks everyone with the winners list
-- Keyboard control on the display: <kbd>Space</kbd> draw · <kbd>Esc</kbd> back · <kbd>F</kbd> full screen · <kbd>W</kbd> winners · <kbd>Q</kbd> QR code full screen · <kbd>M</kbd> sound · <kbd>G</kbd> guides · <kbd>+</kbd> <kbd>−</kbd> <kbd>0</kbd> zoom · <kbd>?</kbd> help
+- Keyboard control on the display: <kbd>Space</kbd> draw · <kbd>Esc</kbd> back · <kbd>F</kbd> full screen · <kbd>W</kbd> winners · <kbd>Q</kbd> QR code full screen · <kbd>R</kbd> registration QR · <kbd>M</kbd> sound · <kbd>G</kbd> guides · <kbd>+</kbd> <kbd>−</kbd> <kbd>0</kbd> zoom · <kbd>?</kbd> help
 
 **Participants**
 - Excel (.xlsx) / CSV upload with header detection, copy-paste from Excel, or typing; duplicate detection and a preview before anything is added
+- **Registration by QR code** — people scan a code on the big screen, enter their first name, last name and organization, get a Code on their phone and join the draw within seconds (needs the live server; section 8)
 - Exclude people one by one, by pasted list, or by search; demo data with 150 fictional people
 
 **Trust & records**
@@ -236,7 +237,8 @@ Free plan limits are far above what a raffle needs (100,000 requests a day). Roo
 3. **In the admin → Online live view**, enter the server address (the tunnel address, or `http://localhost:8787` when you only test on the laptop), press **Test connection**, then **Go live**.
 4. **Share it:** the card shows the **link and QR code**. Turn on **QR code on the big screen** so the audience can scan it from the projector; it hides itself while the reel spins. The card also shows how many people are watching.
 5. **Keep the live display open** — it is what sends the screen to the viewers.
-6. Afterwards press **Stop live view**: viewers see "The live draw has ended" and the link stops working.
+6. **Registration by QR code (optional):** turn on **Registration by QR code** in the same card. Show the code full screen with **⛶ Registration QR full screen** (or <kbd>R</kbd> on the display), or share the link. Each person fills in first name, last name and organization and gets a 6-character Code on their phone; the admin or the display (whichever is open) adds them to **Participants** within a few seconds, skipping anyone already on the list (same Code, or same name and organization). Turn it off before the draw starts — the form then says "Registration is closed".
+7. Afterwards press **Stop live view**: viewers see "The live draw has ended" and the link stops working.
 
 ### Settings (`.env`, Node.js server)
 
@@ -252,11 +254,13 @@ On Cloudflare the same options are `ALLOWED_ORIGINS` in `cloudflare/wrangler.tom
 | `ALLOWED_ORIGINS` | Only allow these sites to use the server, e.g. `https://falcon-98.github.io`. |
 | `STATIC_DIR` | Built site the server also serves (default `out`). |
 
-**Later — a database instead of the JSON file:** the website only talks to the server's small API (`POST /api/rooms`, `PUT /api/rooms/:code`, `GET /api/rooms/:code`, `GET /api/rooms/:code/events`). Moving to a hosted database such as Supabase means changing only `server/live-server.mjs`; `.env.example` already has a place for the connection details.
+**Later — a database instead of the JSON file:** the website only talks to the server's small API (`POST /api/rooms`, `PUT /api/rooms/:code`, `GET /api/rooms/:code`, `GET /api/rooms/:code/events`, and for registration `GET`/`POST /api/rooms/:code/register` and `GET`/`PUT /api/rooms/:code/registrations`). Moving to a hosted database such as Supabase means changing only `server/live-server.mjs`; `.env.example` already has a place for the connection details.
 
 ### Privacy
 
 Everything sent to viewers is public to anyone with the link: the event branding, current prize, counts, up to 60 participant names for the floating bubbles, and the winners (name, organization and code, as on the big screen). The full participant list, exclusions and settings never leave the laptop.
+
+Registration by QR code keeps only first name, last name, organization and the Code on the live server, for that live room; only the event laptop (with the room key) can read the list, and **Stop live view** deletes it.
 
 ## Project structure
 
@@ -265,6 +269,7 @@ app/
   page.tsx            Live display
   admin/page.tsx      Admin console
   live/page.tsx       Online live view for the audience's phones
+  register/page.tsx   Registration form opened from the registration QR code
   layout.tsx, globals.css
 components/
   Bubbles.tsx         Floating name bubbles

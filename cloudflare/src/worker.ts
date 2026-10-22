@@ -10,6 +10,10 @@
  *   GET    /api/rooms/:code/events     → live stream (Server-Sent Events)
  *   PUT    /api/rooms/:code            → publish the screen   (Authorization: Bearer <key>)
  *   DELETE /api/rooms/:code            → end the live view    (Authorization: Bearer <key>)
+ *   GET    /api/rooms/:code/register   → { open, eventTitle }  registration form (phones)
+ *   POST   /api/rooms/:code/register   → { code, name }        register: first name, last name, organization
+ *   GET    /api/rooms/:code/registrations?after=n → { open, total, items }   (Authorization: Bearer <key>)
+ *   PUT    /api/rooms/:code/registrations         → open / close registration { open } (Bearer <key>)
  *
  * Every room is one Durable Object. It keeps the room's JSON (state, key hash, times) in its own
  * storage and holds the viewers' open streams, so updates reach everyone instantly.
@@ -24,6 +28,8 @@ export interface Env {
 const MAX_BODY = 1024 * 1024; // 1 MB per published screen
 const IDLE_TTL = 7 * 24 * 3600 * 1000; // rooms untouched for a week are deleted
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I
+const MAX_REGS = 5000; // registrations per room
+const MAX_FIELD = 60; // characters per name / organization
 
 /* ------------------------------------------------------------- helpers */
 
@@ -120,11 +126,11 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
     return json(500, { error: 'Could not create the room' });
   }
 
-  const m = /^\/api\/rooms\/([A-Z0-9]{4,16})(\/events)?$/.exec(path);
+  const m = /^\/api\/rooms\/([A-Z0-9]{4,16})(\/events|\/register|\/registrations)?$/.exec(path);
   if (m) {
     const stub = env.ROOMS.get(env.ROOMS.idFromName(m[1]));
     // Hand the request to the room; it answers itself (including the live stream).
-    return stub.fetch(new Request(`https://room${m[2] ?? '/'}`, req));
+    return stub.fetch(new Request(`https://room${m[2] ?? '/'}${url.search}`, req));
   }
 
   return json(404, { error: 'not found' });
@@ -132,7 +138,26 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
 
 /* -------------------------------------------------------- one live room */
 
-type Stored = { keyHash: string; state: unknown; createdAt: number; updatedAt: number };
+type Stored = { keyHash: string; state: unknown; createdAt: number; updatedAt: number; regOpen?: boolean };
+type Reg = { n: number; first: string; last: string; org: string; code: string; at: number };
+
+/** "nimal" / "NIMAL" → "Nimal" (names typed in mixed case are kept as they are). */
+const tidy = (v: string) =>
+  v
+    .split(' ')
+    .map((w) => (w.length > 1 && (w === w.toLowerCase() || w === w.toUpperCase()) ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w))
+    .join(' ');
+
+/** First name, last name and organization only (nothing else is accepted or kept). */
+function cleanReg(body: unknown): { reg?: Omit<Reg, 'n' | 'code' | 'at'>; error?: string } {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const f = (v: unknown) => String(v ?? '').replace(/<[^>]*>/g, ' ').replace(/[\u0000-\u001f\u007f<>]/g, '').replace(/\s+/g, ' ').trim();
+  const reg = { first: tidy(f(b.first)), last: tidy(f(b.last)), org: f(b.org) };
+  if (!reg.first || !reg.last || !reg.org) return { error: 'Please fill in your first name, last name and organization.' };
+  if (reg.first.length > MAX_FIELD || reg.last.length > MAX_FIELD || reg.org.length > MAX_FIELD) return { error: `Please keep each field under ${MAX_FIELD} characters.` };
+  return { reg };
+}
+const regKey = (r: { first: string; last: string; org: string }) => `${r.first}|${r.last}|${r.org}`.toLowerCase();
 
 export class Room implements DurableObject {
   private viewers = new Set<WritableStreamDefaultWriter<Uint8Array>>();
@@ -232,6 +257,50 @@ export class Room implements DurableObject {
       });
     }
     if (path === '/events') return json(405, { error: 'method not allowed' });
+
+    if (path === '/register') {
+      const brand = (room.state as { brand?: { eventTitle?: string; company?: string } } | null)?.brand;
+      if (req.method === 'GET') return json(200, { open: !!room.regOpen, eventTitle: brand?.eventTitle, company: brand?.company });
+      if (req.method !== 'POST') return json(405, { error: 'method not allowed' });
+      if (!room.regOpen) return json(403, { error: 'Registration is closed.' });
+      const text = await req.text();
+      if (text.length > 4096) return json(413, { error: 'Too large' });
+      let body: unknown;
+      try {
+        body = JSON.parse(text);
+      } catch {
+        return json(400, { error: 'Invalid request' });
+      }
+      const { reg, error } = cleanReg(body);
+      if (!reg) return json(400, { error });
+      const regs = (await this.ctx.storage.get<Reg[]>('regs')) ?? [];
+      const same = regs.find((r) => regKey(r) === regKey(reg));
+      if (same) return json(200, { ok: true, existing: true, code: same.code, name: `${same.first} ${same.last}` });
+      if (regs.length >= MAX_REGS) return json(409, { error: 'Registration is full.' });
+      let code: string;
+      do code = randomCode().slice(0, 6);
+      while (regs.some((r) => r.code === code));
+      regs.push({ n: regs.length + 1, ...reg, code, at: Date.now() });
+      await this.ctx.storage.put('regs', regs);
+      return json(201, { ok: true, code, name: `${reg.first} ${reg.last}` });
+    }
+
+    if (path === '/registrations') {
+      if (!(await this.authorised(req, room))) return json(401, { error: 'Not allowed' });
+      if (req.method === 'PUT') {
+        let body: { open?: boolean };
+        try {
+          body = (await req.json()) as { open?: boolean };
+        } catch {
+          return json(400, { error: 'Invalid JSON' });
+        }
+        room.regOpen = !!body?.open;
+        await this.ctx.storage.put('room', room);
+      } else if (req.method !== 'GET') return json(405, { error: 'method not allowed' });
+      const after = Number(new URL(req.url).searchParams.get('after')) || 0;
+      const regs = (await this.ctx.storage.get<Reg[]>('regs')) ?? [];
+      return json(200, { open: !!room.regOpen, total: regs.length, items: regs.filter((r) => r.n > after) });
+    }
 
     if (req.method === 'GET') return json(200, { state: room.state, updatedAt: room.updatedAt, viewers: this.viewers.size, now: Date.now() });
 
