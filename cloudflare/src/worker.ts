@@ -130,7 +130,9 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
   if (m) {
     const stub = env.ROOMS.get(env.ROOMS.idFromName(m[1]));
     // Hand the request to the room; it answers itself (including the live stream).
-    return stub.fetch(new Request(`https://room${m[2] ?? '/'}${url.search}`, req));
+    const q = new URLSearchParams(url.search);
+    q.set('room', m[1]); // the room's own code (salts the phones' device ids)
+    return stub.fetch(new Request(`https://room${m[2] ?? '/'}?${q}`, req));
   }
 
   return json(404, { error: 'not found' });
@@ -138,8 +140,11 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
 
 /* -------------------------------------------------------- one live room */
 
-type Stored = { keyHash: string; state: unknown; createdAt: number; updatedAt: number; regOpen?: boolean };
-type Reg = { n: number; first: string; last: string; org: string; code: string; at: number };
+type Stored = { keyHash: string; state: unknown; createdAt: number; updatedAt: number; regOpen?: boolean; onePerDevice?: boolean };
+type Reg = { n: number; first: string; last: string; org: string; code: string; at: number; dev?: string };
+
+/** The phone's own random id (see app/register/page.tsx); only a salted hash of it is kept. */
+const DEVICE_RE = /^[a-f0-9]{32}$/;
 
 /** "nimal" / "NIMAL" → "Nimal" (names typed in mixed case are kept as they are). */
 const tidy = (v: string) =>
@@ -149,7 +154,7 @@ const tidy = (v: string) =>
     .join(' ');
 
 /** First name, last name and organization only (nothing else is accepted or kept). */
-function cleanReg(body: unknown): { reg?: Omit<Reg, 'n' | 'code' | 'at'>; error?: string } {
+function cleanReg(body: unknown): { reg?: Omit<Reg, 'n' | 'code' | 'at' | 'dev'>; error?: string } {
   const b = (body ?? {}) as Record<string, unknown>;
   const f = (v: unknown) => String(v ?? '').replace(/<[^>]*>/g, ' ').replace(/[\u0000-\u001f\u007f<>]/g, '').replace(/\s+/g, ' ').trim();
   const reg = { first: tidy(f(b.first)), last: tidy(f(b.last)), org: f(b.org) };
@@ -161,6 +166,7 @@ const regKey = (r: { first: string; last: string; org: string }) => `${r.first}|
 
 export class Room implements DurableObject {
   private viewers = new Set<WritableStreamDefaultWriter<Uint8Array>>();
+  private regHits = new Map<string, number[]>();
   private ping: ReturnType<typeof setInterval> | undefined;
 
   constructor(
@@ -260,9 +266,33 @@ export class Room implements DurableObject {
 
     if (path === '/register') {
       const brand = (room.state as { brand?: { eventTitle?: string; company?: string } } | null)?.brand;
-      if (req.method === 'GET') return json(200, { open: !!room.regOpen, eventTitle: brand?.eventTitle, company: brand?.company });
+      const one = room.onePerDevice !== false;
+      const code = new URL(req.url).searchParams.get('room') || '';
+      if (req.method === 'GET') {
+        const device = new URL(req.url).searchParams.get('device') || '';
+        let mine: Reg | undefined;
+        if (one && DEVICE_RE.test(device)) {
+          const dev = await sha256(`${code}:${device}`);
+          mine = ((await this.ctx.storage.get<Reg[]>('regs')) ?? []).find((r) => r.dev === dev);
+        }
+        return json(200, {
+          open: !!room.regOpen,
+          onePerDevice: one,
+          eventTitle: brand?.eventTitle,
+          company: brand?.company,
+          ...(mine ? { mine: { code: mine.code, name: `${mine.first} ${mine.last}` } } : {}),
+        });
+      }
       if (req.method !== 'POST') return json(405, { error: 'method not allowed' });
       if (!room.regOpen) return json(403, { error: 'Registration is closed.' });
+      // A phone can't flood a room: a few registrations a minute per address.
+      const ip = req.headers.get('CF-Connecting-IP') || '';
+      const now = Date.now();
+      const hits = (this.regHits.get(ip) ?? []).filter((t) => now - t < 60000);
+      hits.push(now);
+      this.regHits.set(ip, hits);
+      if (this.regHits.size > 10000) this.regHits.clear();
+      if (hits.length > 20) return json(429, { error: 'Too many tries — please wait a minute.' });
       const text = await req.text();
       if (text.length > 4096) return json(413, { error: 'Too large' });
       let body: unknown;
@@ -273,33 +303,45 @@ export class Room implements DurableObject {
       }
       const { reg, error } = cleanReg(body);
       if (!reg) return json(400, { error });
+      const device = String((body as { device?: unknown })?.device ?? '');
+      if (!DEVICE_RE.test(device)) return json(400, { error: 'Please reload the page and try again.' });
+      const dev = await sha256(`${code}:${device}`);
       const regs = (await this.ctx.storage.get<Reg[]>('regs')) ?? [];
+      // One registration per phone (unless the admin turned that off): it gets its own one back.
+      const mine = one && regs.find((r) => r.dev === dev);
+      if (mine) return json(200, { ok: true, existing: true, device: true, code: mine.code, name: `${mine.first} ${mine.last}` });
       const same = regs.find((r) => regKey(r) === regKey(reg));
       if (same) return json(200, { ok: true, existing: true, code: same.code, name: `${same.first} ${same.last}` });
       if (regs.length >= MAX_REGS) return json(409, { error: 'Registration is full.' });
-      let code: string;
-      do code = randomCode().slice(0, 6);
-      while (regs.some((r) => r.code === code));
-      regs.push({ n: regs.length + 1, ...reg, code, at: Date.now() });
+      let ticket: string;
+      do ticket = randomCode().slice(0, 6);
+      while (regs.some((r) => r.code === ticket));
+      regs.push({ n: regs.length + 1, ...reg, code: ticket, at: Date.now(), dev });
       await this.ctx.storage.put('regs', regs);
-      return json(201, { ok: true, code, name: `${reg.first} ${reg.last}` });
+      return json(201, { ok: true, code: ticket, name: `${reg.first} ${reg.last}` });
     }
 
     if (path === '/registrations') {
       if (!(await this.authorised(req, room))) return json(401, { error: 'Not allowed' });
       if (req.method === 'PUT') {
-        let body: { open?: boolean };
+        let body: { open?: boolean; onePerDevice?: boolean };
         try {
-          body = (await req.json()) as { open?: boolean };
+          body = (await req.json()) as { open?: boolean; onePerDevice?: boolean };
         } catch {
           return json(400, { error: 'Invalid JSON' });
         }
-        room.regOpen = !!body?.open;
+        if (typeof body?.open === 'boolean') room.regOpen = body.open;
+        if (typeof body?.onePerDevice === 'boolean') room.onePerDevice = body.onePerDevice;
         await this.ctx.storage.put('room', room);
       } else if (req.method !== 'GET') return json(405, { error: 'method not allowed' });
       const after = Number(new URL(req.url).searchParams.get('after')) || 0;
       const regs = (await this.ctx.storage.get<Reg[]>('regs')) ?? [];
-      return json(200, { open: !!room.regOpen, total: regs.length, items: regs.filter((r) => r.n > after) });
+      return json(200, {
+        open: !!room.regOpen,
+        onePerDevice: room.onePerDevice !== false,
+        total: regs.length,
+        items: regs.filter((r) => r.n > after).map(({ dev: _dev, ...r }) => r), // the device hash stays on the server
+      });
     }
 
     if (req.method === 'GET') return json(200, { state: room.state, updatedAt: room.updatedAt, viewers: this.viewers.size, now: Date.now() });

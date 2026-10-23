@@ -21,7 +21,7 @@ import { BRAND, DEFAULT_LIVE_SERVER, NAME_COLOR_PRESETS, asset } from '@/lib/con
 import { downloadWinners } from '@/lib/excel';
 import QrCode from '@/components/QrCode';
 import { byPrizeRank } from '@/components/Stage';
-import { buildSnapshot, liveClose, liveCreateRoom, liveGet, liveHealth, livePublish, normalizeServer, regSetOpen, registerUrl, useRegistrationSync, viewerUrl } from '@/lib/live';
+import { buildSnapshot, liveClose, liveCreateRoom, liveGet, liveHealth, livePublish, normalizeServer, regConfigure, registerUrl, useRegistrationSync, viewerUrl } from '@/lib/live';
 import { poolFingerprint } from '@/lib/fair';
 import {
   type CompanyDisplay,
@@ -445,18 +445,20 @@ function LiveCard({ state, update, online }: CardProps & { online: boolean }) {
 function RegistrationBox({ state, update, online, server, room }: CardProps & { online: boolean; server: string; room: { code: string; key: string } }) {
   const live = state.settings.live;
   const open = !!live.register;
+  const onePerDevice = live.onePerDevice !== false;
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [copied, setCopied] = useState(false);
   const link = registerUrl(server, room.code);
   const count = state.participants.filter((p) => p.id.startsWith(`reg-${room.code}-`)).length;
 
-  const toggle = async (v: boolean) => {
+  const configure = async (patch: { register?: boolean; onePerDevice?: boolean }) => {
     setBusy(true);
     setErr('');
     try {
-      await regSetOpen(server, room, v);
-      update((s) => ({ ...s, settings: { ...s.settings, live: { ...s.settings.live, register: v } } }));
+      // The server keeps "one per phone" per room: send it with every change so a new room gets it too.
+      await regConfigure(server, room, { open: patch.register ?? open, onePerDevice: patch.onePerDevice ?? onePerDevice });
+      update((s) => ({ ...s, settings: { ...s.settings, live: { ...s.settings.live, ...patch } } }));
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -479,7 +481,13 @@ function RegistrationBox({ state, update, online, server, room }: CardProps & { 
         title="Registration by QR code"
         desc="People scan a QR code and fill in their first name, last name and organization — they join the draw straight away"
         checked={open}
-        onChange={(v) => !busy && void toggle(v)}
+        onChange={(v) => !busy && void configure({ register: v })}
+      />
+      <Setting
+        title="One registration per phone"
+        desc="A phone that has registered once can't register anyone else — it just shows its own Code again"
+        checked={onePerDevice}
+        onChange={(v) => !busy && void configure({ onePerDevice: v })}
       />
       {open && (
         <div className="live-share">
