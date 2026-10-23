@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { IconBan, IconDownload, IconSearch, IconTrash } from '@/components/Icons';
 import { Switch } from './ui';
+import { confirmDialog, messageDialog } from './Dialog';
 import { downloadParticipants } from '@/lib/excel';
 import { deleteRegistration, regNumber } from '@/lib/live';
 import { type RaffleState, eligible, normalize } from '@/lib/store';
@@ -45,14 +46,19 @@ export default function ParticipantList({
   const remove = async (id: string, name: string) => {
     const live = state.settings.live;
     const registered = !!live.room && regNumber(id, live.room.code) !== null;
-    const msg = registered
-      ? `Remove ${name}?\n\nThey registered by QR code: their registration is deleted and their phone can register again.`
-      : `Remove ${name} from the participant list?`;
-    if (!confirm(msg)) return;
+    const ok = await confirmDialog({
+      title: `Remove ${name}?`,
+      message: registered
+        ? 'They registered by QR code: their registration is deleted and their phone can register again.'
+        : 'They leave the participant list. Winner records stay.',
+      okLabel: 'Remove',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await deleteRegistration(live, id);
     } catch (e) {
-      alert(`Could not delete the registration on the live server, so ${name} was not removed. ${e instanceof Error ? e.message : ''}`);
+      void messageDialog(`Could not delete the registration on the live server, so ${name} was not removed. ${e instanceof Error ? e.message : ''}`);
       return;
     }
     update((s) => ({ ...s, participants: s.participants.filter((p) => p.id !== id) }));
@@ -89,9 +95,15 @@ export default function ParticipantList({
     setBulk('');
   };
 
-  const clearAll = () => {
+  const clearAll = async () => {
     if (!state.participants.length) return;
-    if (!confirm(`Delete all ${state.participants.length} participants? Winner records stay in the winners list.`)) return;
+    const ok = await confirmDialog({
+      title: `Delete all ${state.participants.length} participants?`,
+      message: 'Winner records stay in the winners list.',
+      okLabel: 'Delete all',
+      danger: true,
+    });
+    if (!ok) return;
     update((s) => ({ ...s, participants: [] }));
   };
 
@@ -114,7 +126,7 @@ export default function ParticipantList({
           <button className="btn sm" onClick={() => void downloadParticipants(state.participants)} disabled={!state.participants.length}>
             <IconDownload /> Export
           </button>
-          <button className="btn sm danger" onClick={clearAll} disabled={!state.participants.length}>
+          <button className="btn sm danger" onClick={() => void clearAll()} disabled={!state.participants.length}>
             <IconTrash /> Clear
           </button>
         </div>
