@@ -267,7 +267,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 201, { code, key });
     }
 
-    const m = /^\/api\/rooms\/([A-Z0-9]{4,16})(\/events|\/register|\/registrations)?$/.exec(path);
+    const m = /^\/api\/rooms\/([A-Z0-9]{4,16})(\/events|\/register|\/registrations(?:\/(\d{1,6}))?)?$/.exec(path);
     if (m) {
       const code = m[1];
       const room = db.rooms[code];
@@ -278,7 +278,8 @@ const server = http.createServer(async (req, res) => {
         const brand = room.state?.brand;
         if (req.method === 'GET') {
           const device = url.searchParams.get('device') || '';
-          const mine = DEVICE_RE.test(device) && room.onePerDevice !== false ? (room.regs ?? []).find((r) => r.dev === sha256(`${code}:${device}`)) : null;
+          const dev = DEVICE_RE.test(device) ? sha256(`${code}:${device}`) : null;
+          const mine = dev ? [...(room.regs ?? [])].reverse().find((r) => r.dev === dev) : null; // the latest one
           return json(res, 200, {
             open: !!room.regOpen,
             onePerDevice: room.onePerDevice !== false,
@@ -304,6 +305,18 @@ const server = http.createServer(async (req, res) => {
         return json(res, out.status, out.body);
       }
 
+      // Admin: delete one registration — the person leaves the list and their phone can register again
+      if (m[3]) {
+        if (!authorised(req, room)) return json(res, 401, { error: 'Not allowed' });
+        if (req.method !== 'DELETE') return json(res, 405, { error: 'method not allowed' });
+        const i = (room.regs ?? []).findIndex((r) => r.n === Number(m[3]));
+        if (i >= 0) {
+          room.regs[i] = { n: room.regs[i].n, deleted: true, at: Date.now() }; // keep the number, forget the person and the phone
+          save();
+        }
+        return json(res, 200, { ok: true, found: i >= 0 });
+      }
+
       // Admin / display: open or close registration, and fetch new registrations
       if (m[2] === '/registrations') {
         if (!authorised(req, room)) return json(res, 401, { error: 'Not allowed' });
@@ -323,8 +336,8 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, {
           open: !!room.regOpen,
           onePerDevice: room.onePerDevice !== false,
-          total: regs.length,
-          items: regs.filter((r) => r.n > after).map(({ dev, ...r }) => r), // the device hash stays on the server
+          total: regs.filter((r) => !r.deleted).length,
+          items: regs.filter((r) => r.n > after && !r.deleted).map(({ dev, ...r }) => r), // the device hash stays on the server
         });
       }
 

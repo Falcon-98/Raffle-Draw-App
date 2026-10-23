@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { IconBan, IconDownload, IconSearch, IconTrash } from '@/components/Icons';
 import { Switch } from './ui';
 import { downloadParticipants } from '@/lib/excel';
+import { deleteRegistration, regNumber } from '@/lib/live';
 import { type RaffleState, eligible, normalize } from '@/lib/store';
 
 type Filter = 'all' | 'in' | 'out' | 'won';
@@ -41,8 +42,19 @@ export default function ParticipantList({
   const setExcluded = (id: string, excluded: boolean) =>
     update((s) => ({ ...s, participants: s.participants.map((p) => (p.id === id ? { ...p, excluded } : p)) }));
 
-  const remove = (id: string, name: string) => {
-    if (!confirm(`Remove ${name} from the participant list?`)) return;
+  const remove = async (id: string, name: string) => {
+    const live = state.settings.live;
+    const registered = !!live.room && regNumber(id, live.room.code) !== null;
+    const msg = registered
+      ? `Remove ${name}?\n\nThey registered by QR code: their registration is deleted and their phone can register again.`
+      : `Remove ${name} from the participant list?`;
+    if (!confirm(msg)) return;
+    try {
+      await deleteRegistration(live, id);
+    } catch (e) {
+      alert(`Could not delete the registration on the live server, so ${name} was not removed. ${e instanceof Error ? e.message : ''}`);
+      return;
+    }
     update((s) => ({ ...s, participants: s.participants.filter((p) => p.id !== id) }));
   };
 
@@ -191,7 +203,7 @@ export default function ParticipantList({
                         {won ? <span className="badge win">Winner</span> : forfeitIds.has(p.id) ? <span className="badge out">Not present</span> : p.excluded ? <span className="badge out">Excluded</span> : <span className="badge in">Eligible</span>}
                       </td>
                       <td>
-                        <button className="icon-btn" style={{ width: 32, height: 32 }} onClick={() => remove(p.id, p.name)} aria-label={`Remove ${p.name}`} title="Remove">
+                        <button className="icon-btn" style={{ width: 32, height: 32 }} onClick={() => void remove(p.id, p.name)} aria-label={`Remove ${p.name}`} title="Remove">
                           <IconTrash style={{ width: 15, height: 15 }} />
                         </button>
                       </td>
