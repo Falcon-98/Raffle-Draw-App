@@ -3,6 +3,7 @@
 import { DragEvent, FormEvent, useRef, useState } from 'react';
 import { IconClipboard, IconDownload, IconPencil, IconSparkle, IconUpload } from '@/components/Icons';
 import { asset } from '@/lib/config';
+import { confirmDialog } from './Dialog';
 import { downloadTemplate, joinName, parseFile, parsePasted, type ImportRow } from '@/lib/excel';
 import { type Participant, type RaffleState, participantKey, uid } from '@/lib/store';
 
@@ -106,13 +107,13 @@ export default function ImportPanel({
     return { unique: fresh, dupInFile, dupExisting, newOnes: fresh.filter((r) => !existing.has(participantKey(r))) };
   })();
 
-  const commit = (mode: 'append' | 'replace') => {
+  const commit = async (mode: 'append' | 'replace') => {
     if (!analysis) return;
     if (mode === 'replace') {
       const msg = state.winners.length
         ? `Replace all ${state.participants.length} participants? The ${state.winners.length} winner record(s) are kept, but their names leave the participant list.`
         : `Replace all ${state.participants.length} participants with ${analysis.unique.length} new ones?`;
-      if (state.participants.length && !confirm(msg)) return;
+      if (state.participants.length && !(await confirmDialog({ title: 'Replace the participant list?', message: msg, okLabel: 'Replace', danger: true }))) return;
     }
     const toAdd: Participant[] = (mode === 'replace' ? analysis.unique : analysis.newOnes).map((r) => ({ ...r, id: uid() }));
     update((s) => ({ ...s, participants: mode === 'replace' ? toAdd : [...s.participants, ...toAdd] }));
@@ -286,11 +287,11 @@ export default function ImportPanel({
           </div>
           {analysis.unique.length > 50 && <p className="note">…and {(analysis.unique.length - 50).toLocaleString()} more</p>}
           <div className="row" style={{ marginTop: 12 }}>
-            <button className="btn primary" onClick={() => commit('append')} disabled={!analysis.newOnes.length}>
+            <button className="btn primary" onClick={() => void commit('append')} disabled={!analysis.newOnes.length}>
               Add {analysis.newOnes.length.toLocaleString()} to the list
             </button>
             {state.participants.length > 0 && (
-              <button className="btn" onClick={() => commit('replace')}>
+              <button className="btn" onClick={() => void commit('replace')}>
                 Replace current list
               </button>
             )}

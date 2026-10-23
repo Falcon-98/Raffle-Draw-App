@@ -5,6 +5,7 @@ import { Background, ClickMark } from '@/components/Brand';
 import ImportPanel from '@/components/admin/ImportPanel';
 import ParticipantList from '@/components/admin/ParticipantList';
 import { AdminGate, Setting, lockAdmin } from '@/components/admin/ui';
+import { DialogHost, confirmDialog, messageDialog, promptDialog } from '@/components/admin/Dialog';
 import {
   IconDownload,
   IconHome,
@@ -83,6 +84,7 @@ function Admin() {
   return (
     <div className="admin">
       <Background />
+      <DialogHost />
       <header className="admin-top">
         <div className="admin-title">
           <ClickMark />
@@ -328,7 +330,8 @@ function LiveCard({ state, update, online }: CardProps & { online: boolean }) {
   };
 
   const stop = async () => {
-    if (!room || !confirm('Stop the online live view? People watching will see "The live draw has ended" and this link stops working.')) return;
+    if (!room) return;
+    if (!(await confirmDialog({ title: 'Stop the online live view?', message: 'People watching will see "The live draw has ended" and this link stops working.', okLabel: 'Stop live view', danger: true }))) return;
     setBusy(true);
     try {
       await liveClose(server, room);
@@ -347,7 +350,7 @@ function LiveCard({ state, update, online }: CardProps & { online: boolean }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      prompt('Copy this link:', link);
+      void promptDialog({ title: 'Copy this link', input: { value: link, readOnly: true }, okLabel: 'Done', cancelLabel: null });
     }
   };
   const ago = stats ? Math.max(0, Math.round((stats.seen - stats.updatedAt) / 1000)) : null;
@@ -455,7 +458,7 @@ function RegistrationBox({ state, update, online, server, room }: CardProps & { 
   const [showList, setShowList] = useState(false);
 
   const remove = async (id: string, name: string) => {
-    if (!confirm(`Delete ${name}'s registration?\n\nThey leave the participant list and their phone can register again.`)) return;
+    if (!(await confirmDialog({ title: `Delete ${name}'s registration?`, message: 'They leave the participant list and their phone can register again.', okLabel: 'Delete', danger: true }))) return;
     setErr('');
     try {
       await deleteRegistration(live, id);
@@ -484,7 +487,7 @@ function RegistrationBox({ state, update, online, server, room }: CardProps & { 
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      prompt('Copy this link:', link);
+      void promptDialog({ title: 'Copy this link', input: { value: link, readOnly: true }, okLabel: 'Done', cancelLabel: null });
     }
   };
 
@@ -555,8 +558,8 @@ function RegistrationBox({ state, update, online, server, room }: CardProps & { 
 
 /* ---------------------------------------------------------- winners */
 function WinnersCard({ state, update }: CardProps) {
-  const undo = (id: string, name: string) => {
-    if (!confirm(`Undo ${name}'s win? They go back into the draw (if they're not excluded) and that prize can be drawn again.`)) return;
+  const undo = async (id: string, name: string) => {
+    if (!(await confirmDialog({ title: `Undo ${name}'s win?`, message: "They go back into the draw (if they're not excluded) and that prize can be drawn again.", okLabel: 'Undo win', danger: true }))) return;
     update((s) => {
       const w = s.winners.find((x) => x.id === id);
       const reopen = w && !w.forfeited && s.settings.prizes.includes(w.prize);
@@ -568,8 +571,8 @@ function WinnersCard({ state, update }: CardProps) {
     });
   };
   /** Winner isn't here to collect: keep the record (marked), keep them out of later draws, redraw the prize. */
-  const forfeit = (id: string, name: string, prize: string) => {
-    if (!confirm(`${name} is not present?\n\nThey stay in the record as "Not present", can't be drawn again, and "${prize}" goes back up so you can draw again.`)) return;
+  const forfeit = async (id: string, name: string, prize: string) => {
+    if (!(await confirmDialog({ title: `${name} is not present?`, message: `They stay in the record as "Not present", can't be drawn again, and "${prize}" goes back up so you can draw again.`, okLabel: 'Not present' }))) return;
     update((s) => ({
       ...s,
       winners: s.winners.map((w) => (w.id === id ? { ...w, forfeited: true } : w)),
@@ -577,9 +580,11 @@ function WinnersCard({ state, update }: CardProps) {
     }));
     sendCommand({ type: 'reset-view' });
   };
-  const clear = () => {
-    if (!confirm('Clear all winners? Everyone becomes eligible again. Export the winners first if you need a record.')) return;
-    update((s) => ({ ...s, winners: [] }));
+  const clear = async () => {
+    if (!(await confirmDialog({ title: `Delete all ${state.winners.length} winners?`, message: 'Everyone becomes eligible again and the prizes can be drawn again. Export the winners first (Excel) if you need a record.', okLabel: 'Delete all winners', danger: true }))) return;
+    // Back to the first prize that has places again, and the big screen back to the welcome view.
+    update((s) => settlePrize({ ...s, winners: [], settings: { ...s.settings, currentPrize: s.settings.prizes[0] ?? s.settings.currentPrize } }));
+    sendCommand({ type: 'reset-view' });
   };
 
   return (
@@ -590,7 +595,7 @@ function WinnersCard({ state, update }: CardProps) {
           <button className="btn sm" disabled={!state.winners.length} onClick={() => void downloadWinners(byPrizeRank(state.winners, state.settings.prizes))}>
             <IconDownload /> Excel
           </button>
-          <button className="btn sm danger" disabled={!state.winners.length} onClick={clear}>
+          <button className="btn sm danger" disabled={!state.winners.length} onClick={() => void clear()} title="Delete all winners" aria-label="Delete all winners">
             <IconTrash />
           </button>
         </div>
@@ -613,11 +618,11 @@ function WinnersCard({ state, update }: CardProps) {
                 </div>
               </div>
               {!w.forfeited && (
-                <button className="btn sm" title="Winner is not here: keep the record, redraw this prize" onClick={() => forfeit(w.id, w.name, w.prize)}>
+                <button className="btn sm" title="Winner is not here: keep the record, redraw this prize" onClick={() => void forfeit(w.id, w.name, w.prize)}>
                   Not present
                 </button>
               )}
-              <button className="icon-btn" style={{ width: 32, height: 32 }} title="Undo this win" aria-label={`Undo win for ${w.name}`} onClick={() => undo(w.id, w.name)}>
+              <button className="icon-btn" style={{ width: 32, height: 32 }} title="Undo this win" aria-label={`Undo win for ${w.name}`} onClick={() => void undo(w.id, w.name)}>
                 <IconUndo style={{ width: 15, height: 15 }} />
               </button>
             </li>
@@ -637,7 +642,7 @@ function PrizesCard({ state, update }: CardProps) {
     const p = name.trim();
     if (!p) return;
     if (state.settings.prizes.some((x) => x.toLowerCase() === p.toLowerCase())) {
-      alert(`There is already a prize called “${p}”. Raise its quantity instead.`);
+      void messageDialog(`There is already a prize called “${p}”. Raise its quantity instead.`);
       return;
     }
     update((s) =>
@@ -668,11 +673,11 @@ function PrizesCard({ state, update }: CardProps) {
       return { ...next, settings: { ...next.settings, currentPrize: nextPrize(next) ?? next.settings.currentPrize } };
     });
   /** Renames the prize everywhere: the list, its quantity, the next draw and the winners who won it. */
-  const rename = (p: string) => {
-    const n = prompt('Prize name', p)?.trim();
+  const rename = async (p: string) => {
+    const n = (await promptDialog({ title: 'Rename prize', input: { value: p, label: 'Prize name' }, okLabel: 'Rename' }))?.trim();
     if (!n || n === p) return;
     if (state.settings.prizes.some((x) => x !== p && x.toLowerCase() === n.toLowerCase())) {
-      alert(`There is already a prize called “${n}”.`);
+      void messageDialog(`There is already a prize called “${n}”.`);
       return;
     }
     update((s) => {
@@ -734,7 +739,7 @@ function PrizesCard({ state, update }: CardProps) {
                 aria-label={`How many ${p}`}
                 title="How many of this prize"
               />
-              <button className="icon-btn" style={{ width: 28, height: 28 }} aria-label={`Rename ${p}`} title="Rename" onClick={() => rename(p)}>
+              <button className="icon-btn" style={{ width: 28, height: 28 }} aria-label={`Rename ${p}`} title="Rename" onClick={() => void rename(p)}>
                 ✎
               </button>
               <button className="icon-btn" style={{ width: 28, height: 28 }} aria-label={`Remove ${p}`} title="Remove" onClick={() => remove(p)}>
@@ -987,7 +992,7 @@ function SettingsCard({ state, update }: CardProps) {
         settings: { ...st.settings, logo, companyDisplay: st.settings.companyDisplay === 'name' ? 'logo' : st.settings.companyDisplay },
       }));
     } catch {
-      alert('That image could not be read. Use a PNG, JPG or SVG file.');
+      void messageDialog('That image could not be read. Use a PNG, JPG or SVG file.');
     } finally {
       if (logoRef.current) logoRef.current.value = '';
     }
@@ -1000,7 +1005,7 @@ function SettingsCard({ state, update }: CardProps) {
       const eventLogo = await logoToDataUrl(f, 1000, 320);
       update((st) => ({ ...st, settings: { ...st.settings, eventLogo, titleDisplay: 'logo' } }));
     } catch {
-      alert('That image could not be read. Use a PNG, JPG or SVG file.');
+      void messageDialog('That image could not be read. Use a PNG, JPG or SVG file.');
     } finally {
       if (eventLogoRef.current) eventLogoRef.current.value = '';
     }
@@ -1244,21 +1249,53 @@ function BackupCard({ state, update }: CardProps) {
 
   const importJson = async (f?: File) => {
     if (!f) return;
+    let data: RaffleState;
     try {
-      const data = JSON.parse(await f.text()) as RaffleState;
+      data = JSON.parse(await f.text()) as RaffleState;
       if (!Array.isArray(data.participants) || !data.settings) throw new Error();
-      if (!confirm(`Restore backup with ${data.participants.length} participants and ${data.winners?.length ?? 0} winners? This replaces everything here.`)) return;
-      update(() => migrate(data));
     } catch {
-      alert('That file is not a valid raffle backup.');
+      void messageDialog('That file is not a valid raffle backup.');
+      if (fileRef.current) fileRef.current.value = '';
+      return;
+    }
+    try {
+      const ok = await confirmDialog({
+        title: 'Restore this backup?',
+        message: `${data.participants.length} participants and ${data.winners?.length ?? 0} winners. This replaces everything on this computer.`,
+        okLabel: 'Restore',
+        danger: true,
+      });
+      if (!ok) return;
+      update(() => migrate(data));
+      sendCommand({ type: 'reset-view' });
     } finally {
       if (fileRef.current) fileRef.current.value = '';
     }
   };
 
-  const reset = () => {
-    if (prompt('Type RESET to delete all participants, winners and settings on this computer.') !== 'RESET') return;
-    update(() => defaultState());
+  const reset = async () => {
+    const ok = await confirmDialog({
+      title: 'Reset everything?',
+      message: 'This deletes all participants, winners and settings on this computer and stops the online live view. Export a backup first if you may need it.',
+      typeToConfirm: 'RESET',
+      okLabel: 'Reset all',
+      danger: true,
+    });
+    if (!ok) return;
+    const live = state.settings.live;
+    if (live.room) {
+      try {
+        await liveClose(normalizeServer(live.server), live.room); // viewers see "The live draw has ended"
+      } catch {
+        /* server gone or room already closed */
+      }
+    }
+    // Keep the live server address (and its password): it belongs to this setup, not to the draw.
+    update(() => {
+      const d = defaultState();
+      return { ...d, settings: { ...d.settings, live: { ...d.settings.live, server: live.server || d.settings.live.server, password: live.password } } };
+    });
+    sendCommand({ type: 'reset-view' });
   };
 
   return (
@@ -1275,7 +1312,7 @@ function BackupCard({ state, update }: CardProps) {
           <IconUpload /> Restore
         </button>
         <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={(e) => void importJson(e.target.files?.[0])} />
-        <button className="btn danger" onClick={reset}>
+        <button className="btn danger" onClick={() => void reset()}>
           <IconTrash /> Reset all
         </button>
       </div>
