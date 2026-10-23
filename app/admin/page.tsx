@@ -21,7 +21,7 @@ import { BRAND, DEFAULT_LIVE_SERVER, NAME_COLOR_PRESETS, asset } from '@/lib/con
 import { downloadWinners } from '@/lib/excel';
 import QrCode from '@/components/QrCode';
 import { byPrizeRank } from '@/components/Stage';
-import { buildSnapshot, liveClose, liveCreateRoom, liveGet, liveHealth, livePublish, normalizeServer, regConfigure, registerUrl, useRegistrationSync, viewerUrl } from '@/lib/live';
+import { buildSnapshot, liveClose, liveCreateRoom, liveGet, liveHealth, livePublish, normalizeServer, deleteRegistration, regConfigure, regNumber, registerUrl, useRegistrationSync, viewerUrl } from '@/lib/live';
 import { poolFingerprint } from '@/lib/fair';
 import {
   type CompanyDisplay,
@@ -450,7 +450,20 @@ function RegistrationBox({ state, update, online, server, room }: CardProps & { 
   const [err, setErr] = useState('');
   const [copied, setCopied] = useState(false);
   const link = registerUrl(server, room.code);
-  const count = state.participants.filter((p) => p.id.startsWith(`reg-${room.code}-`)).length;
+  const registered = state.participants.filter((p) => regNumber(p.id, room.code) !== null).reverse(); // newest first
+  const count = registered.length;
+  const [showList, setShowList] = useState(false);
+
+  const remove = async (id: string, name: string) => {
+    if (!confirm(`Delete ${name}'s registration?\n\nThey leave the participant list and their phone can register again.`)) return;
+    setErr('');
+    try {
+      await deleteRegistration(live, id);
+      update((s) => ({ ...s, participants: s.participants.filter((p) => p.id !== id) }));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   const configure = async (patch: { register?: boolean; onePerDevice?: boolean }) => {
     setBusy(true);
@@ -512,6 +525,29 @@ function RegistrationBox({ state, update, online, server, room }: CardProps & { 
         </div>
       )}
       {!open && count > 0 && <span className="note" style={{ margin: 0 }}>📝 {count} people registered by QR code (registration closed).</span>}
+      {count > 0 && (
+        <button className="btn sm" style={{ alignSelf: 'flex-start' }} onClick={() => setShowList((v) => !v)} aria-expanded={showList}>
+          {showList ? 'Hide registrations' : `Show registrations (${count})`}
+        </button>
+      )}
+      {showList && count > 0 && (
+        <ul className="reg-list">
+          {registered.map((p) => (
+            <li key={p.id}>
+              <div className="who">
+                <span className="name">{p.name}</span>
+                <div className="what">
+                  {p.group}
+                  {p.ticket ? ` · ${p.ticket}` : ''}
+                </div>
+              </div>
+              <button className="btn sm danger" title="Delete this registration — the phone can register again" aria-label={`Delete registration of ${p.name}`} onClick={() => void remove(p.id, p.name)}>
+                Delete
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       {err && <p className="note" style={{ color: 'var(--red)', margin: 0 }}>{err}</p>}
     </div>
   );
@@ -1199,8 +1235,11 @@ function BackupCard({ state, update }: CardProps) {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `click2026-raffle-backup-${new Date().toISOString().slice(0, 16).replace(':', '')}.json`;
+    // In the page and released a bit later: Safari and Firefox cancel a download whose link is gone at once.
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(a.href);
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 30000);
   };
 
   const importJson = async (f?: File) => {

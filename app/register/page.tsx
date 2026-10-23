@@ -52,13 +52,17 @@ export default function RegisterPage() {
         if (r.eventTitle) setTitle(r.eventTitle);
         setOnePerDevice(r.onePerDevice !== false);
         // This phone registered already (the server remembers it, even if the page's note was cleared).
-        if (r.mine) {
-          setDone(r.mine);
-          try {
+        try {
+          if (r.mine) {
+            setDone(r.mine);
             localStorage.setItem(saved(code), JSON.stringify(r.mine));
-          } catch {
-            /* private mode */
+          } else {
+            // The server is the record: no registration for this phone (e.g. the admin deleted it) → the form again.
+            setDone(null);
+            localStorage.removeItem(saved(code));
           }
+        } catch {
+          /* private mode */
         }
         setStatus(r.open ? 'open' : 'closed');
       })

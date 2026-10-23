@@ -244,6 +244,30 @@ export const regConfigure = (server: string, room: LiveRoom, patch: { open?: boo
     body: JSON.stringify(patch),
   });
 
+/** Registration number of a participant who registered by QR code in this live room (else null). */
+export function regNumber(participantId: string, roomCode: string) {
+  const m = /^reg-([A-Z0-9]+)-(\d+)$/.exec(participantId);
+  return m && m[1] === roomCode ? Number(m[2]) : null;
+}
+
+/**
+ * Deletes a QR-code registration on the live server: the person leaves the server's list and their
+ * phone can register again. Does nothing for people who did not register in the current live room.
+ */
+export async function deleteRegistration(live: { server: string; room?: LiveRoom }, participantId: string) {
+  const n = live.room ? regNumber(participantId, live.room.code) : null;
+  if (!live.room || n === null) return;
+  try {
+    await call<{ ok: boolean }>(`${normalizeServer(live.server)}/api/rooms/${live.room.code}/registrations/${n}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${live.room.key}` },
+    });
+  } catch (e) {
+    // The live room is gone already (live view stopped): its registrations went with it.
+    if (!/no live draw/i.test(e instanceof Error ? e.message : '')) throw e;
+  }
+}
+
 /** The registration form people open by scanning the QR code. */
 export function registerUrl(server: string, code: string) {
   return viewerUrl(server, code).replace(asset('/live/'), asset('/register/'));

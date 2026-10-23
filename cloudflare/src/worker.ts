@@ -14,6 +14,7 @@
  *   POST   /api/rooms/:code/register   → { code, name }        register: first name, last name, organization
  *   GET    /api/rooms/:code/registrations?after=n → { open, total, items }   (Authorization: Bearer <key>)
  *   PUT    /api/rooms/:code/registrations         → open / close registration { open } (Bearer <key>)
+ *   DELETE /api/rooms/:code/registrations/:n      → delete one registration; that phone can register again
  *
  * Every room is one Durable Object. It keeps the room's JSON (state, key hash, times) in its own
  * storage and holds the viewers' open streams, so updates reach everyone instantly.
@@ -126,7 +127,7 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
     return json(500, { error: 'Could not create the room' });
   }
 
-  const m = /^\/api\/rooms\/([A-Z0-9]{4,16})(\/events|\/register|\/registrations)?$/.exec(path);
+  const m = /^\/api\/rooms\/([A-Z0-9]{4,16})(\/events|\/register|\/registrations(?:\/\d{1,6})?)?$/.exec(path);
   if (m) {
     const stub = env.ROOMS.get(env.ROOMS.idFromName(m[1]));
     // Hand the request to the room; it answers itself (including the live stream).
@@ -141,7 +142,7 @@ async function route(req: Request, env: Env, url: URL): Promise<Response> {
 /* -------------------------------------------------------- one live room */
 
 type Stored = { keyHash: string; state: unknown; createdAt: number; updatedAt: number; regOpen?: boolean; onePerDevice?: boolean };
-type Reg = { n: number; first: string; last: string; org: string; code: string; at: number; dev?: string };
+type Reg = { n: number; first: string; last: string; org: string; code: string; at: number; dev?: string; deleted?: boolean };
 
 /** The phone's own random id (see app/register/page.tsx); only a salted hash of it is kept. */
 const DEVICE_RE = /^[a-f0-9]{32}$/;
@@ -271,9 +272,9 @@ export class Room implements DurableObject {
       if (req.method === 'GET') {
         const device = new URL(req.url).searchParams.get('device') || '';
         let mine: Reg | undefined;
-        if (one && DEVICE_RE.test(device)) {
+        if (DEVICE_RE.test(device)) {
           const dev = await sha256(`${code}:${device}`);
-          mine = ((await this.ctx.storage.get<Reg[]>('regs')) ?? []).find((r) => r.dev === dev);
+          mine = ((await this.ctx.storage.get<Reg[]>('regs')) ?? []).reverse().find((r) => r.dev === dev); // the latest one
         }
         return json(200, {
           open: !!room.regOpen,
@@ -321,6 +322,20 @@ export class Room implements DurableObject {
       return json(201, { ok: true, code: ticket, name: `${reg.first} ${reg.last}` });
     }
 
+    const del = /^\/registrations\/(\d+)$/.exec(path);
+    if (del) {
+      if (!(await this.authorised(req, room))) return json(401, { error: 'Not allowed' });
+      if (req.method !== 'DELETE') return json(405, { error: 'method not allowed' });
+      const regs = (await this.ctx.storage.get<Reg[]>('regs')) ?? [];
+      const i = regs.findIndex((r) => r.n === Number(del[1]));
+      if (i >= 0) {
+        // Keep the number, forget the person and the phone: it can register again.
+        regs[i] = { n: regs[i].n, first: '', last: '', org: '', code: '', at: Date.now(), deleted: true };
+        await this.ctx.storage.put('regs', regs);
+      }
+      return json(200, { ok: true, found: i >= 0 });
+    }
+
     if (path === '/registrations') {
       if (!(await this.authorised(req, room))) return json(401, { error: 'Not allowed' });
       if (req.method === 'PUT') {
@@ -339,8 +354,8 @@ export class Room implements DurableObject {
       return json(200, {
         open: !!room.regOpen,
         onePerDevice: room.onePerDevice !== false,
-        total: regs.length,
-        items: regs.filter((r) => r.n > after).map(({ dev: _dev, ...r }) => r), // the device hash stays on the server
+        total: regs.filter((r) => !r.deleted).length,
+        items: regs.filter((r) => r.n > after && !r.deleted).map(({ dev: _dev, ...r }) => r), // the device hash stays on the server
       });
     }
 
